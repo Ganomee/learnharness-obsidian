@@ -1,0 +1,3 @@
+[submodule "learnharness-obsidian/upstream/learnharness"]
+	path = learnharness-obsidian/upstream/learnharness
+	url = https://github.com/amosblomqvist/learnharness.git

@@ -1,0 +1,18 @@
+{
+	"nodes":[
+		{"id":"n0","type":"file","file":"10 Goals/Understand weighted averages.md","x":-120,"y":-240,"width":410,"height":270,"color":"1"},
+		{"id":"n1","type":"file","file":"20 Sessions/DEMO-001 - Why averages can mislead.md","x":380,"y":-220,"width":410,"height":270,"color":"2"},
+		{"id":"n2","type":"file","file":"30 Plans/DEMO-001 - Plan.md","x":940,"y":-220,"width":410,"height":270,"color":"3"},
+		{"id":"n4","type":"file","file":"40 Knowledge/P002 - Combined rates require group weights.md","x":530,"y":600,"width":410,"height":270,"color":"5"},
+		{"id":"n5","type":"file","file":"60 Reviews/DEMO - Session reflection.md","x":1260,"y":600,"width":410,"height":270,"color":"6"},
+		{"id":"n3","type":"file","file":"40 Knowledge/P001 - A rate has a denominator.md","x":-80,"y":380,"width":410,"height":270,"color":"4"}
+	],
+	"edges":[
+		{"id":"e0","fromNode":"n0","fromSide":"right","toNode":"n1","toSide":"left"},
+		{"id":"e1","fromNode":"n1","fromSide":"right","toNode":"n2","toSide":"left"},
+		{"id":"e2","fromNode":"n2","fromSide":"right","toNode":"n3","toSide":"left"},
+		{"id":"e3","fromNode":"n3","fromSide":"right","toNode":"n4","toSide":"left"},
+		{"id":"e4","fromNode":"n4","fromSide":"right","toNode":"n5","toSide":"left"},
+		{"id":"e5","fromNode":"n5","fromSide":"right","toNode":"n1","toSide":"left"}
+	]
+}

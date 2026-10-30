@@ -1,0 +1,14 @@
+node_modules/
+plugin/dist/
+test-vault/.obsidian/workspace*.json
+test-vault/.trash/
+*.log
+.dev/
+test-vault/.obsidian/plugins/learnharness-lab/
+.env
+.env.*
+!.env.example
+*.local.key
+test-vault/95 Runtime proofs/*.md
+!test-vault/95 Runtime proofs/2026-10-27T17-06-38-025Z-d968e16b.md
+test-vault/LearnHarness/

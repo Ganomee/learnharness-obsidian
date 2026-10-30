@@ -1,0 +1,19 @@
+{
+	"nodes":[
+		{"id":"rate","type":"file","file":"40 Knowledge/P001 - A rate has a denominator.md","x":0,"y":160,"width":340,"height":230,"color":"4"},
+		{"id":"transfer","type":"file","file":"50 Arguments/A002 - Transfer calculation.md","x":1320,"y":420,"width":360,"height":280,"color":"2"},
+		{"id":"simulation","type":"file","file":"20 Sessions/DEMO-002 - Learner teacher simulation.md","x":1840,"y":160,"width":420,"height":330,"color":"6"},
+		{"id":"pooled","type":"file","file":"40 Knowledge/P002 - Combined rates require group weights.md","x":800,"y":440,"width":360,"height":260,"color":"5"},
+		{"id":"target","type":"file","file":"40 Knowledge/P003 - Choose the right weighting target.md","x":420,"y":490,"width":380,"height":280,"color":"3"},
+		{"id":"derive","type":"file","file":"50 Arguments/A001 - Deriving a combined rate.md","x":1080,"y":-320,"width":360,"height":260,"color":"1"}
+	],
+	"edges":[
+		{"id":"e-rate-target","fromNode":"rate","fromSide":"right","toNode":"target","toSide":"left","label":"understand"},
+		{"id":"e-target-pooled","fromNode":"target","fromSide":"right","toNode":"pooled","toSide":"left","label":"choose target"},
+		{"id":"e-rate-derive","fromNode":"rate","fromSide":"right","toNode":"derive","toSide":"left","label":"numerator / denominator"},
+		{"id":"e-pooled-derive","fromNode":"pooled","fromSide":"right","toNode":"derive","toSide":"left","label":"derive"},
+		{"id":"e-transfer","fromNode":"derive","fromSide":"right","toNode":"transfer","toSide":"right","label":"apply"},
+		{"id":"e-simulation","fromNode":"transfer","fromSide":"right","toNode":"simulation","toSide":"left","label":"evidence"},
+		{"id":"e-sim-target","fromNode":"target","fromSide":"right","toNode":"simulation","toSide":"top","label":"misconception → correction"}
+	]
+}

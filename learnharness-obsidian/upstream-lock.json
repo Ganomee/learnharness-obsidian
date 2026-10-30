@@ -1,0 +1,17 @@
+{
+  "repository": "https://github.com/amosblomqvist/learnharness.git",
+  "revision": "3dc88472eea41eed0d5e5f29c2f16f8d063c415b",
+  "packageVersion": "0.3.8",
+  "hashFormat": "sha256 of canonical Git blob bytes (independent of checkout line endings)",
+  "sha256": {
+    "package.json": "3779ac575618da803f2e81b7e9c444baef8d4ced55b583af8ea652e1ea067542",
+    "src/core/plan-tree.ts": "5be2868a4eec21c28bc3a29b9af647f7ebacad15a834f383a3c352ccccaa78ba",
+    "src/core/phases.ts": "01bc0a910ffca8a5eb6c5cabcd0ffd2d9c7ad209eaef46f655b9a0094f3e6a99",
+    "src/core/ports.ts": "a143ae8bb429c37a2b099041603cf128916eaeec951decfb666bdb3ef2c75c0b",
+    "src/core/native-messages.ts": "7741ae3bc5d1e13f588fb091ab4d2dd0d86cf56b2e830415fdcf45f99adacd96",
+    "src/server/pi/call-ids.ts": "4a74b89d0ec86f7d66f414d8f982046294e108151542b41cdf19c9625183681b",
+    "src/agent/teacher-agent.ts": "806c29d4ed91413b12eb850d278ccd0fdbe84175415c60a585a627b059d91bd2",
+    "src/agent/prompt-segments.ts": "2b46f0fa7388423d152b15def74a2fe997e69da36ec04b3d6d3c886ad911353d",
+    "config.ts": "4430db25336ece2141e66faa3d22d93aaed08281d31622d1fddd8352b84c6c9d"
+  }
+}
