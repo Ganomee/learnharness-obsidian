@@ -1,9 +1,9 @@
 {
   "id": "learnharness-lab",
   "name": "LearnHarness Lab",
-  "version": "0.1.0",
-  "minAppVersion": "1.8.7",
-  "description": "Development preview of original LearnHarness probing with interactive questions and Vault-backed session recovery.",
+  "version": "0.1.1",
+  "minAppVersion": "1.11.4",
+  "description": "Adaptive LearnHarness teaching in Obsidian with local secret selection, spoken answers, and Vault-backed session recovery.",
   "author": "LearnHarness Obsidian contributors",
   "isDesktopOnly": false
 }

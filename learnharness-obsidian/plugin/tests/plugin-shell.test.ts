@@ -24,7 +24,9 @@ function harness(options: { marker?: boolean | string; mismatch?: boolean; failA
   const files = new Map<string, string>(); let calls = 0;
   if (options.marker !== false) files.set('00 Start/Working agreement.md', typeof options.marker === 'string' ? options.marker : '---\nid: learnharness-disposable-vault\n---');
   const folders = new Set<string>();
+  const secrets = new Map<string, string>();
   const app = {
+    secretStorage: { getSecret: (id: string) => secrets.get(id) ?? null },
     vault: {
       getAbstractFileByPath: (path: string) => files.has(path) ? new File(path) : folders.has(path) ? new Folder(path) : null,
       read: async (file: File) => {
@@ -36,10 +38,13 @@ function harness(options: { marker?: boolean | string; mismatch?: boolean; failA
     },
     workspace: { getLeaf: () => ({ openFile: async (file: File) => { opened.push(file.path); } }) },
   };
-  class BasePlugin { constructor(public app: unknown) {} addCommand() {} registerView() {} addRibbonIcon() {} registerHoverLinkSource(id: string, info: { display: string; defaultMod: boolean }) { hoverSources.push({ id, ...info }); } }
+  class BasePlugin { constructor(public app: unknown) {} addCommand() {} registerView() {} addRibbonIcon() {} addSettingTab() {} loadData() { return Promise.resolve(null); } saveData() { return Promise.resolve(); } registerHoverLinkSource(id: string, info: { display: string; defaultMod: boolean }) { hoverSources.push({ id, ...info }); } }
+  class BaseSettingTab { constructor(public app: unknown, public plugin: unknown) {} }
+  class SecretComponent { constructor() {} setValue() { return this; } onChange() { return this; } }
+  class Setting { constructor() {} setName() { return this; } setDesc() { return this; } addComponent() { return this; } }
   const context = vm.createContext({
     module: { exports: {} },
-    require: (id: string) => { assert.equal(id, 'obsidian'); return { Plugin: BasePlugin, TFile: File, TFolder: Folder, Notice: class { constructor(message: string) { notices.push(message); } } }; },
+    require: (id: string) => { assert.equal(id, 'obsidian'); return { Plugin: BasePlugin, PluginSettingTab: BaseSettingTab, SecretComponent, Setting, TFile: File, TFolder: Folder, Notice: class { constructor(message: string) { notices.push(message); } } }; },
     console: { error() {} },
     crypto: { randomUUID: () => '12345678-0000-0000-0000-000000000000' },
     __proof: async () => { calls++; return options.proof ? options.proof() : { status: 'passed', mock: true }; },

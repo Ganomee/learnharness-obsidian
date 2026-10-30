@@ -24,11 +24,12 @@ This is a read-only classification of the current records, not a new test run or
 | R14 disposable demo baseline | Fictional seeded vault, setup instructions, and structural validation are recorded. | Confirm clean reproduction and disposable reset path before final acceptance. |
 | R15 Markdown cross-device persistence | Immutable Markdown snapshots now preserve readable transcript plus canonical native record; divergence is surfaced for explicit branch selection. Cross-device resume and actual Sync conflict behavior are not evidenced. | Verify migration and branch resolution, then test sequential resume and conflicts after real Obsidian Sync. |
 
-## 0. Establish a reviewable repository baseline
+## 0. Establish a reviewable repository baseline — complete
 
-- The six-file Wayfinder map commit is `38e69b0`; it is published at `origin/main`.
-- Public GitHub repo `Ganomee/learnharness-obsidian` exists and local `origin` is configured. The remote currently contains only the map commit; project source is not yet published.
-- The root index contains more than 1,500 staged paths, including nested agent-role snapshots. Review and commit only the intended integration project paths. Root `.gitmodules` and the gitlink are configured at `learnharness-obsidian/upstream/learnharness`; `git submodule status` recognizes pinned revision `3dc8847`. Final offline suite and build checks pass before commit.
+- The implementation baseline was staged as six focused commits and pushed to `origin/main`; latest published commit is `b3dcaa1` (`Package GitHub releases with licensing notices`).
+- Root `.gitmodules` and the gitlink are configured at `learnharness-obsidian/upstream/learnharness`; `git submodule status` recognizes pinned revision `3dc8847`.
+- The `lh-adversarial` and `lh-implementer` role snapshots were left untracked and excluded from the public baseline. A local Obsidian-generated `test-vault/.obsidian/core-plugins.json` is also untracked.
+- Previous final verification before those commits passed 60/60 integration tests, build, upstream pin check, 159-note vault validation, and the four selected adversarial suites. The current teacher-UX/settings changes still need their own verification.
 
 ## 1. Record the accepted product decisions
 
@@ -65,7 +66,8 @@ Build an R01–R15 evidence checklist from the acceptance column in [`docs/requi
 
 ## Current blockers and boundaries
 
-- The public `origin/main` contains the map commit only. More than 1,500 staged paths include `lh-adversarial` and `lh-implementer` nested snapshots; exclude those from a public integration baseline. Root submodule metadata is now correct.
-- No provider credential is available in this environment, and no original-agent live-provider session is evidenced. Budget behavior passes offline tests but is not live-billing evidence and cannot coordinate simultaneous use from offline devices.
+- The public implementation baseline is complete, but combined-work licensing review and a tagged GitHub/BRAT release are still open.
+- The shared LearnHarness workspace contains no real `.env` or process `DEEPSEEK_API_KEY`; only `.env.example` is present. No provider credential was loaded into the plugin. The new SecretStorage setting needs verification, and a live session still needs a credential plus separate authorization.
+- Budget behavior has offline test evidence but no live-billing evidence and cannot coordinate simultaneous use from unsynced devices.
 - Physical mobile floor tests, verification of the shared provider spend cap, real Markdown session migration/sync/conflict behavior, an actual upstream candidate upgrade, and final combined-work licensing review remain open.
 - The current preview is a useful starting point, not evidence that R01–R15 are all complete.

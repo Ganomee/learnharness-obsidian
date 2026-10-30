@@ -2,12 +2,21 @@
 
 Updated: 30 October 2026
 
+## 30 October 2026: adaptive teacher path and local provider setup
+
+- User clarified that the product must be the original model-driven LearnHarness prober/teacher flow, not the scripted walkthrough or an AI pretending to be the learner. The pinned source confirms a one-question-at-a-time probe, an evidence-based plan, then short motivated teaching steps with adaptive checks and plan revisions. The plugin already calls those original factories; the learner-facing screen has now been revised to make that live path primary, keep the fixed demo explicit, remove AI-learner roleplay from the active learning flow, reveal teacher checks after prose, and capture optional thinking-while-reading separately.
+- Added spoken input for learning goals and follow-ups, alongside the existing spoken answer/reasoning path. Actual microphone service behavior is not yet verified in this Obsidian build.
+- Replaced the per-view raw API-key box with Obsidian SecretStorage selection. The plugin stores only the selected secret name in plugin settings; session Markdown and built JS receive no key. Obsidian API typings and manifest minimum are now 1.14.4 / 1.11.4 because `SecretComponent` and SecretStorage are required.
+- No real `.env` or `DEEPSEEK_API_KEY` environment variable is present in the shared LearnHarness workspace. Only `.env.example` is present there. I did not read `.env` files belonging to neighboring projects. The user has been asked for the actual file path (path only, not the key) so a local one-time import can be considered.
+- The real Obsidian UI reopened a saved completed demo, which disabled the mode selector. Selecting **New session · choose teacher** unlocked the actual **DeepSeek Flash · paid API** mode. After this UI change, the workspace was left at the new goal form. No provider request was made: the SecretStorage key is unconfigured here, and the $10 smoke ceiling is not run authorization.
+- Build, tests, and UI verification for these newest changes are pending. The previous 60/60 test/build pass was before this UI and settings update.
+
 ## 30 October 2026: MVP decisions, GitHub upstream, and implementation
 
 - User set the mobile support floors to iOS 15 and Android 5.1, required cross-device session sync with Markdown representations of persistent plugin-owned learning state, set a US$10 aggregate ceiling for one eventual synthetic original-agent smoke, and chose GitHub installation (preferably BRAT) instead of requiring a public Community Plugins listing. These choices are recorded in `docs/requirements.md` R09, R10, R06, and new R15.
 - Session storage now writes immutable Markdown snapshots with a readable transcript and a fenced canonical JSON block containing the exact native record, including the provider budget. Legacy JSON sessions and all valid JSON backup revisions are mirrored into a linked Markdown history without deleting originals; damaged/future-schema bytes are preserved in Markdown incident notes. Divergent snapshot leaves are surfaced for explicit branch selection and retained after resolution. This is implemented locally; cross-device Sync and conflict-copy behavior are not verified.
-- The session-level provider ledger is shared across original-agent and AI-learner calls, reserves worst-case estimated cost before sending, persists each reservation, records authoritative usage, and fails closed on unknown pricing policy or uncertain usage. The budget behavior passes offline unit/integration coverage; it has not been exercised against live billing. Concurrent provider use from unsynced devices is not globally coordinated; keep the one authorized smoke on one device. The $10 ceiling is not authorization to call a provider.
-- Added a GitHub Actions release workflow for version-matched BRAT assets and a manual install archive. Public `Ganomee/learnharness-obsidian` exists; only the Wayfinder map commit is currently published. The project baseline and release workflow have not been pushed. Root `.gitmodules` and the pinned upstream gitlink are now configured; `git submodule status` recognizes revision `3dc8847`.
+- The session-level provider ledger reserves worst-case estimated cost before sending, persists each reservation, records authoritative usage, and fails closed on unknown pricing policy or uncertain usage. Its offline behavior passed the previous regression suite; live billing has not been exercised. Concurrent provider use from unsynced devices is not globally coordinated. The $10 ceiling is not authorization to call a provider.
+- Added a GitHub Actions release workflow for version-matched BRAT assets and a manual install archive. Public `Ganomee/learnharness-obsidian` now contains the implementation baseline through `b3dcaa1`; root `.gitmodules` and the pinned upstream gitlink are recognized at `3dc8847`.
 - Final offline verification: 60/60 integration tests pass; production plugin build and upstream pin guard pass; vault validator passes on 159 notes. Contract, runtime, teacher-cycle, and session-durability adversarial suites detect 4/4, 6/6, 3/3, and 4/4 selected mutations respectively. These checks do not establish real Obsidian Sync, physical mobile support, or actual provider billing behavior.
 - No provider request, physical mobile run, or final licensing review has occurred in this continuation. Physical iOS 15 and Android 5.1 support remains unverified.
 
@@ -112,11 +121,11 @@ Vault read-back snapshots are not crash-atomic transactions or cross-device comp
 
 ## Current work queue
 
-1. Correct root Git submodule metadata and prepare a clean, reviewable project baseline without including the nested role snapshots.
-2. Verify Markdown migration, conflict handling, and the shared spend ledger offline; do not call a live provider without separate authorization.
+1. Finish and verify the adaptive teacher UX and one-time SecretStorage setup; import the development key only after locating the user's actual local `.env`.
+2. Verify Markdown migration, conflict handling, and the shared spend ledger offline; no live provider call without separate authorization.
 3. Complete actual cross-device Obsidian Sync checks and physical iOS 15 / Android 5.1 plugin runs.
-4. Review combined-work licensing and source/notice obligations before creating a release; then publish the BRAT/manual assets from a version-matched GitHub tag.
-5. Assess a candidate upstream upgrade and run a fresh independent adversarial review against the resulting baseline.
+4. Review combined-work licensing and source/notice obligations before creating a release; then publish BRAT/manual assets from a version-matched GitHub tag.
+5. Assess an upstream candidate upgrade and run a fresh independent adversarial review against the published integration baseline.
 
 ## Limits and deferred work
 

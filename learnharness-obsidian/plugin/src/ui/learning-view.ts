@@ -2,8 +2,6 @@ import { ItemView, requestUrl, type WorkspaceLeaf } from 'obsidian';
 import { SessionController, type SessionView, type AnswerRequest, type SessionEngine } from '../session-controller';
 import { createDeepSeekEngine, createObsidianFetch } from '../adapters/deepseek-engine';
 import { createDemoEngine } from '../adapters/demo-engine';
-import { simulateLearnerAnswer } from '../adapters/ai-learner';
-import type { NativeRequest } from '../adapters/deepseek-engine';
 import { matchSpokenChoice, startSpeechCapture, type SpeechCapture, type SpeechWindow } from './speech-input';
 import { userFacingTextOf } from '../../../upstream/learnharness/src/core/native-messages.ts';
 
@@ -14,9 +12,7 @@ const DEMO_GOAL = 'Understand how to combine success rates across groups of diff
 export class LearningView extends ItemView {
   private session?: SessionView;
   private sessions: SessionView[] = [];
-  private mode: 'demo' | 'deepseek' = 'demo';
-  private apiKey = '';
-  private learnerProfile = 'A curious beginner who often gives each group equal weight. Think aloud honestly, include uncertainty, and do not try to please the teacher.';
+  private mode: 'demo' | 'deepseek' = 'deepseek';
   private goal = '';
   private error = '';
   private busy = false;
@@ -26,7 +22,7 @@ export class LearningView extends ItemView {
   private recoveryId = '';
   private speechCapture?: SpeechCapture;
 
-  constructor(leaf: WorkspaceLeaf, private readonly controller: SessionController) { super(leaf); }
+  constructor(leaf: WorkspaceLeaf, private readonly controller: SessionController, private readonly getApiKey: () => string | null) { super(leaf); }
   getViewType(): string { return LEARNING_VIEW; }
   getDisplayText(): string { return 'LearnHarness'; }
   getIcon(): string { return 'graduation-cap'; }
@@ -44,13 +40,13 @@ export class LearningView extends ItemView {
     try { this.sessions = await this.controller.listSessions(); } catch (error) { this.error = this.message(error); }
     this.render();
   }
-  async onClose(): Promise<void> { this.closed = true; this.active?.abort(); this.speechCapture?.stop(); this.speechCapture = undefined; this.apiKey = ''; }
+  async onClose(): Promise<void> { this.closed = true; this.active?.abort(); this.speechCapture?.stop(); this.speechCapture = undefined; }
 
   private message(error: unknown): string { return error instanceof Error ? error.message : String(error); }
   private engine(): SessionEngine {
     if (this.mode === 'demo') return createDemoEngine();
-    if (!this.apiKey.trim()) throw new Error('Enter a DeepSeek key for this app session first.');
-    const apiKey = this.apiKey.trim();
+    const apiKey = this.getApiKey()?.trim();
+    if (!apiKey) throw new Error('No DeepSeek key is selected. Open Settings → Community plugins → LearnHarness Lab and select or create one in SecretStorage.');
     const transport = createObsidianFetch(requestUrl);
     return budget => createDeepSeekEngine(apiKey, transport, budget);
   }
@@ -83,6 +79,27 @@ export class LearningView extends ItemView {
     return { signal, providerMode: this.mode, onEvent: () => { if (this.statusEl) this.statusEl.textContent = 'Original agent is running…'; } };
   }
 
+  private addVoiceInput(parent: HTMLElement, field: HTMLTextAreaElement, label = 'Speak') {
+    const row = parent.createDiv({ cls: 'lh-speech-row' });
+    const button = row.createEl('button', { text: label, attr: { type: 'button', 'aria-label': label } });
+    const status = row.createSpan({ cls: 'lh-dictation-status', text: 'Speak freely; review the transcript before sending.' });
+    button.disabled = this.busy;
+    button.addEventListener('click', () => {
+      if (this.speechCapture) { this.speechCapture.stop(); return; }
+      const capture = startSpeechCapture(window as SpeechWindow, {
+        result: transcript => {
+          field.value = [field.value.trim(), transcript].filter(Boolean).join(field.value.trim() ? '\n' : '');
+          field.dispatchEvent(new Event('input', { bubbles: true }));
+          status.setText(`Heard: “${transcript}” — review it, then send.`);
+        },
+        error: message => { status.setText(message); button.setText(label); this.speechCapture = undefined; },
+        end: () => { button.setText(label); this.speechCapture = undefined; },
+      });
+      if (!capture) { status.setText('Speech input is unavailable here; type your response instead.'); return; }
+      this.speechCapture = capture; button.setText('Listening…'); status.setText('Listening. Speak, then review the transcript.');
+    });
+  }
+
   private render(): void {
     const root = this.contentEl;
     root.empty(); root.addClass('lh-learning'); root.setAttribute('data-lh-testid', 'learning-view');
@@ -105,21 +122,19 @@ export class LearningView extends ItemView {
     const controls = root.createDiv({ cls: 'lh-controls' });
     const label = controls.createEl('label', { text: 'Learning mode' });
     const mode = label.createEl('select', { attr: { 'aria-label': 'Learning mode', 'data-lh-testid': 'learning-mode' } });
-    mode.createEl('option', { text: 'Scripted demo · offline', value: 'demo' });
-    mode.createEl('option', { text: 'DeepSeek Flash · paid API', value: 'deepseek' });
+    mode.createEl('option', { text: 'Adaptive LearnHarness teacher · DeepSeek', value: 'deepseek' });
+    mode.createEl('option', { text: 'Fixed scripted demo · offline', value: 'demo' });
     mode.value = this.mode; mode.disabled = this.busy || !!this.session;
     mode.addEventListener('change', () => { this.mode = mode.value as typeof this.mode; this.render(); });
     if (this.mode === 'deepseek') {
-      const keyLabel = controls.createEl('label', { text: 'DeepSeek API key' });
-      const key = keyLabel.createEl('input', { type: 'password', attr: { placeholder: 'Kept in memory only', autocomplete: 'off', 'aria-label': 'DeepSeek API key' } });
-      key.value = this.apiKey; key.disabled = this.busy;
-      key.addEventListener('input', () => { this.apiKey = key.value; });
-      const profileLabel = controls.createEl('label', { text: 'AI learner profile' });
-      const profile = profileLabel.createEl('textarea', { attr: { rows: '3', 'aria-label': 'AI learner profile' } });
-      profile.value = this.learnerProfile; profile.disabled = this.busy;
-      profile.addEventListener('input', () => { this.learnerProfile = profile.value; });
-      controls.createEl('p', { text: 'The original LearnHarness teacher sends the session and learning prompt to DeepSeek. The optional AI learner sends only this lesson goal, current question/options and learner profile; it never receives the answer key. Each learner answer is one extra paid request (512-token cap, no retry). Key clears when this view closes.', cls: 'lh-muted' });
-    } else controls.createEl('p', { text: 'The demo uses a fixed exercise with the original agent and grading. It is not an adaptive live lesson.', cls: 'lh-muted' });
+      const connected = !!this.getApiKey()?.trim();
+      controls.createEl('p', {
+        text: connected
+          ? 'Live teacher connected. The original LearnHarness prober and teacher adapt to your answers and reasoning. Your key is selected from Obsidian SecretStorage; it is not copied into session notes.'
+          : 'This is the real adaptive teacher path. First select or create your DeepSeek key once in Settings → Community plugins → LearnHarness Lab. The key is read from Obsidian SecretStorage, not from session notes.',
+        cls: connected ? 'lh-provider-ready' : 'lh-muted',
+      });
+    } else controls.createEl('p', { text: 'A fixed, offline walkthrough for checking the plugin UI. It does not adapt the lesson to your answers.', cls: 'lh-muted' });
 
     const resume = controls.createEl('label', { text: 'Saved sessions' });
     const picker = resume.createEl('select', { attr: { 'aria-label': 'Saved sessions', 'data-lh-testid': 'saved-sessions' } });
@@ -143,7 +158,7 @@ export class LearningView extends ItemView {
         ? this.controller.resolveSessionBranch(selected.id, selected.branchSnapshotId)
         : this.controller.loadSession(selected.id));
     });
-    this.button(controls, 'New session', () => { this.session = undefined; this.goal = ''; this.error = ''; this.render(); });
+    this.button(controls, 'New session · choose teacher', () => { this.session = undefined; this.goal = ''; this.error = ''; this.mode = 'deepseek'; this.render(); });
 
     if (!this.session) {
       if (this.mode === 'demo') {
@@ -157,11 +172,12 @@ export class LearningView extends ItemView {
         lesson.createDiv({ text: 'About 4 minutes · Offline · Saves in this vault · No API key', cls: 'lh-lesson-meta' });
       } else {
         const goalLabel = root.createEl('label', { text: 'What do you want to understand?' });
-        const goal = goalLabel.createEl('textarea', { attr: { rows: '3', placeholder: 'For example: why an average of averages can be misleading', 'aria-label': 'Learning goal' } });
+        const goal = goalLabel.createEl('textarea', { attr: { rows: '4', placeholder: 'Say it in your own words. Include what you already think, what is confusing, and what you want to be able to do.', 'aria-label': 'Learning goal' } });
         goal.value = this.goal; goal.disabled = this.busy;
         goal.addEventListener('input', () => { this.goal = goal.value; });
+        this.addVoiceInput(root, goal, 'Speak your goal');
       }
-      this.button(root, this.mode === 'demo' ? 'Start scripted demo' : 'Start probing with Flash', () => {
+      this.button(root, this.mode === 'demo' ? 'Start offline walkthrough' : 'Start with the adaptive teacher', () => {
         const requestedGoal = this.mode === 'demo' ? DEMO_GOAL : this.goal.trim();
         if (!requestedGoal) { this.error = 'Enter a learning goal first.'; this.render(); return; }
         let engine;
@@ -209,13 +225,14 @@ export class LearningView extends ItemView {
         finish.createEl('h3', { text: 'You combined the counts, then checked the idea in a new example.' });
         finish.createEl('p', { text: 'Your transcript, answers, reasoning, confidence, and teacher plan are saved in this vault. Open the linked lesson notes for a worked reference or start a fresh session.' });
         this.button(finish, 'Open the lesson notes', () => { void this.app.workspace.openLinkText('20 Sessions/DEMO-001 - Why averages can mislead', '', false); });
-        this.button(finish, 'Start another session', () => { this.session = undefined; this.goal = ''; this.error = ''; this.render(); }, true);
+        this.button(finish, 'Start a real adaptive lesson', () => { this.session = undefined; this.goal = ''; this.error = ''; this.mode = 'deepseek'; this.render(); }, true);
       }
       if (this.session.needsTeacher) root.createDiv({ text: 'The assessment is saved. Continue to resume original teacher planning.', cls: 'lh-note' });
       if (!progress.complete && this.session.question && this.session.pending) this.renderQuestion(root, this.session);
       else if (!progress.complete) {
         const text = root.createEl('textarea', { attr: { rows: '3', placeholder: 'Continue, or describe what is still unclear', 'aria-label': 'Continue learning' } });
         text.disabled = this.busy;
+        this.addVoiceInput(root, text, 'Speak a follow-up');
         this.button(root, this.mode === 'demo' ? 'Continue scripted demo' : 'Send to Flash', () => {
           let engine;
           try { engine = this.engine(); } catch (error) { this.error = this.message(error); this.render(); return; }
@@ -327,7 +344,22 @@ export class LearningView extends ItemView {
   }
   private renderQuestion(root: HTMLElement, session: SessionView): void {
     const question = session.question!;
-    const card = root.createDiv({ cls: 'lh-question' });
+    const input = session.pending?.input && typeof session.pending.input === 'object'
+      ? session.pending.input as { type?: string }
+      : {};
+    const predicted = input.type === 'predict';
+    const behindReveal = !!(session.record as any).tree && !predicted;
+    const host = root.createDiv({ cls: behindReveal ? 'lh-question-gate' : '' });
+    const reading = behindReveal ? host.createEl('textarea', {
+      attr: { rows: '2', 'aria-label': 'Thinking while reading', placeholder: 'While reading the teacher’s explanation, what are you thinking? You can speak freely; this is optional.' },
+    }) : undefined;
+    if (reading) {
+      reading.disabled = this.busy;
+      this.addVoiceInput(host, reading, 'Speak while reading');
+    }
+    const reveal = behindReveal ? host.createEl('details', { cls: 'lh-check-reveal' }) : undefined;
+    reveal?.createEl('summary', { text: question.kind === 'ask' ? 'Open the teacher’s question' : 'Check your understanding' });
+    const card = (reveal ?? host).createDiv({ cls: 'lh-question' });
     card.createEl('h3', { text: question.question });
     if (question.context) card.createEl('p', { text: question.context });
     const selection = new Set<string>();
@@ -366,7 +398,7 @@ export class LearningView extends ItemView {
               card.querySelectorAll<HTMLInputElement>('.lh-option input').forEach(input => { input.checked = selection.has(input.value); });
             }
           }
-          append(thinking, transcript);
+          if (!freeText) append(thinking, transcript);
           speechStatus.setText(freeText
             ? `Heard: “${transcript}” — review the text, then submit.`
             : selectedLabels.length
@@ -388,28 +420,13 @@ export class LearningView extends ItemView {
     }
     const submit = (dontKnow = false) => {
       if (!dontKnow && !selection.size && !freeText?.value.trim()) { this.error = 'Choose or enter an answer first.'; this.render(); return; }
-      const request: AnswerRequest = { values: [...selection], thinking: thinking.value, ...(freeText ? { text: freeText.value, other: freeText.value } : {}), ...(dontKnow ? { dontKnow: true } : {}), ...(confidence && !dontKnow ? { confidence: Number(confidence.value) } : {}) };
+      const request: AnswerRequest = { values: [...selection], thinking: thinking.value, ...(reading?.value.trim() ? { readingThinking: reading.value } : {}), ...(freeText ? { text: freeText.value, other: freeText.value } : {}), ...(dontKnow ? { dontKnow: true } : {}), ...(confidence && !dontKnow ? { confidence: Number(confidence.value) } : {}) };
       let engine;
       try { engine = this.engine(); } catch (error) { this.error = this.message(error); this.render(); return; }
       void this.perform(signal => this.controller.answer(session.id, session.pending!.toolCallId, request, engine, this.options(signal)));
     };
     const actions = card.createDiv({ cls: 'lh-actions' });
     this.button(actions, 'Submit answer', () => submit(), true);
-    if (this.mode === 'deepseek') this.button(actions, 'Let AI learner answer · 1 request', () => {
-      let teacherEngine;
-      try { teacherEngine = this.engine(); } catch (error) { this.error = this.message(error); this.render(); return; }
-      void this.perform(async signal => {
-        if (this.statusEl) this.statusEl.textContent = 'AI learner is composing a response…';
-        const budgeted = await this.controller.withProviderBudget(session.id, budget => simulateLearnerAnswer({
-          request: requestUrl as NativeRequest, apiKey: this.apiKey, goal: session.record.title,
-          question, profile: this.learnerProfile, budget, signal,
-        }));
-        const answer = budgeted.value;
-        this.session = budgeted.session;
-        if (this.statusEl) this.statusEl.textContent = 'Original LearnHarness teacher is responding…';
-        return this.controller.answer(session.id, session.pending!.toolCallId, answer, teacherEngine, this.options(signal));
-      });
-    });
     if (question.kind === 'quiz') this.button(actions, 'I don’t know', () => submit(true));
   }
 }

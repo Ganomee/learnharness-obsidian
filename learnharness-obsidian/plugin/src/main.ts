@@ -4,6 +4,7 @@ import { isDisposableVault } from './adapters/sandbox-marker.mjs';
 import { SessionController, type SessionVault } from './session-controller';
 import { LearningView, LEARNING_VIEW } from './ui/learning-view';
 import { GlobalGraphView, GLOBAL_GRAPH_VIEW } from './ui/global-graph-view';
+import { DEFAULT_SETTINGS, LearnHarnessSettingsTab, type LearnHarnessSettings } from './provider-settings';
 
 const SANDBOX_MARKER = '00 Start/Working agreement.md';
 const REPORT_FOLDER = '95 Runtime proofs';
@@ -13,10 +14,19 @@ export default class LearnHarnessLab extends Plugin {
   private running = false;
   private disposed = false;
   private controller?: SessionController;
+  settings: LearnHarnessSettings = { ...DEFAULT_SETTINGS };
+  private settingsReady: Promise<void> = Promise.resolve();
 
   onload(): void {
     this.disposed = false;
-    this.registerView(LEARNING_VIEW, leaf => new LearningView(leaf, this.sessionController()));
+    this.settingsReady = this.loadData()
+      .then((saved: Partial<LearnHarnessSettings> | null) => { this.settings = { ...DEFAULT_SETTINGS, ...saved }; })
+      .catch((error: unknown) => {
+        console.error('LearnHarness settings could not be loaded', error);
+        new Notice('LearnHarness settings could not be loaded. Configure the provider key again in plugin settings.', 10000);
+      });
+    this.addSettingTab(new LearnHarnessSettingsTab(this.app, this));
+    this.registerView(LEARNING_VIEW, leaf => new LearningView(leaf, this.sessionController(), () => this.getDeepSeekApiKey()));
     this.registerView(GLOBAL_GRAPH_VIEW, leaf => new GlobalGraphView(leaf));
     this.registerHoverLinkSource(GLOBAL_GRAPH_VIEW, { display: 'LearnHarness Lab', defaultMod: false });
     this.addCommand({ id: 'open-learning', name: 'Open learning workspace', callback: () => { void this.openLearning(); } });
@@ -31,6 +41,17 @@ export default class LearnHarnessLab extends Plugin {
   }
 
   onunload(): void { this.disposed = true; this.controller?.dispose(); }
+
+  async setDeepSeekSecretId(value: string): Promise<void> {
+    const next = { ...this.settings, deepSeekSecretId: value };
+    await this.saveData(next);
+    this.settings = next;
+  }
+
+  getDeepSeekApiKey(): string | null {
+    if (!this.settings.deepSeekSecretId) return null;
+    return this.app.secretStorage.getSecret(this.settings.deepSeekSecretId);
+  }
 
   private sessionController(): SessionController {
     if (this.controller) return this.controller;
@@ -57,6 +78,7 @@ export default class LearnHarnessLab extends Plugin {
 
   private async openLearning(): Promise<void> {
     try {
+      await this.settingsReady;
       const marker = this.app.vault.getAbstractFileByPath(SANDBOX_MARKER);
       if (!(marker instanceof TFile) || !isDisposableVault(await this.app.vault.read(marker))) throw new Error('Use this preview in the marked disposable LearnHarness vault.');
       const existing = this.app.workspace.getLeavesOfType(LEARNING_VIEW)[0];
