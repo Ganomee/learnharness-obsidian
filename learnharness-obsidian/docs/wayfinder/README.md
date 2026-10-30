@@ -17,3 +17,4 @@ Start from the map, then address the open decision tickets before implementation
 
 - [Complete LearnHarness Obsidian MVP](complete-learnharness-mvp.md)
 - [Next steps toward the complete MVP](next-steps.md)
+- [Adaptive lesson UX and audio-device handling](tickets/improve-learning-session-ux-and-audio.md)

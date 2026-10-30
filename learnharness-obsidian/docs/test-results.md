@@ -53,3 +53,16 @@ All desktop UI operations wrote only within the marked `test-vault`. Provider ad
 The current process environment and local `.env` contain no DeepSeek credential, so no original-agent provider request was attempted during the latest continuation. The prior one-request smoke remains connectivity-only evidence.
 
 A Windows GitHub Actions workflow is checked in for these baseline checks. It has not been pushed or executed on hosted CI.
+
+## 30 October 2026: adaptive lesson UI and microphone diagnostics
+
+| Check | Executed result | Limits |
+| --- | --- | --- |
+| `npm.cmd test` | 76/76 passing, including original phase/plan derivation, graded vs open feedback, microphone device choice, errors, and capture lifecycle | Mocked audio/device seams do not establish physical capture |
+| `npm.cmd run build` | Pass; pinned upstream hash guard passes | Guard is not an upstream compatibility review |
+| `npm.cmd run validate:vault` | 255 notes pass JSON, IDs, wiki links, headings, and canvas targets | Structural validation only |
+| `npm.cmd run harness:obsidian` | Build, test-vault install, isolated-profile launch, and manifest/status pass; 8 sessions, 75 backups, 3 runtime proofs | First isolated launch requires selecting the marked test-vault in Obsidian's vault selector |
+| Obsidian 1.14.5 desktop UI | Reloaded installed plugin; observed adaptive step 1/3, probe counter, an open question, formatted bra-ket math, and the microphone error state. Also opened the saved offline lesson: 4/4 milestones and a completed answer showed separate wrong/correct choices, collapsed reasoning, and confidence. | The RDP host exposed no microphone input to Obsidian; speech detection and transcription could not run |
+| Provider calls | None made | No live DeepSeek/Deepgram behavior or spend was tested; the $10 ceiling is not authorization |
+
+The real adaptive progress and answer feedback are implemented in `plugin/src/ui/learning-progress.ts` and displayed in `plugin/src/ui/learning-view.ts`. The voice UI reports the host's absent input and directs the user to Windows/RDP input configuration. The live physical-device check remains open in [the UX/audio ticket](wayfinder/tickets/improve-learning-session-ux-and-audio.md).

@@ -133,7 +133,18 @@ Vault read-back snapshots are not crash-atomic transactions or cross-device comp
 
 ## Current work queue
 
-1. Finish and verify the adaptive teacher UX and one-time SecretStorage setup; import the development key only after locating the user's actual local `.env`.
+## 30 October 2026: adaptive lesson UX and audio-device diagnosis
+
+- Compared the Obsidian lesson flow with the pinned original LearnHarness phase, plan, question, and answer components. Added adaptive 3-step progress from original transcript state, teacher-position status, compact graded feedback, ungraded open-answer cards, and Obsidian Markdown/math rendering. The progress does not reuse fixed demo milestones.
+- Added microphone input enumeration/selection, explicit listening/voice-detected/transcribing states, and actionable errors for missing input, denied permission, stale devices, and busy devices. Corrected setup copy so a stored provider key is shown as ready rather than falsely connected.
+- Inspected the reloaded Obsidian 1.14.5 UI in the marked test vault: progress, a live open question, formatted bra-ket math, and the no-microphone error appeared. Obsidian reported no microphone input device on this Windows/RDP host, so live audio capture and transcription remain unverified.
+- Verification: 76/76 integration tests, production build plus upstream pin guard, 255-note vault validation, isolated harness install/launch/status, and `git diff --check` pass. First isolated-profile launch opens the vault chooser; selecting `test-vault` worked and no “Vault not found” dialog appeared.
+- No DeepSeek or Deepgram provider call was made. The accepted $10 ceiling is only a limit, not authorization.
+- Detailed source comparison, checklist, and evidence are in [the adaptive lesson UX/audio ticket](docs/wayfinder/tickets/improve-learning-session-ux-and-audio.md) and [the test record](docs/test-results.md).
+
+## Current work queue
+
+1. Finish one-time SecretStorage setup and verify real adaptive behavior only with separate authorization and an available credential.
 2. Verify Markdown migration, conflict handling, and the shared spend ledger offline; no live provider call without separate authorization.
 3. Complete actual cross-device Obsidian Sync checks and physical iOS 15 / Android 5.1 plugin runs.
 4. Review combined-work licensing and source/notice obligations before creating a release; then publish BRAT/manual assets from a version-matched GitHub tag.

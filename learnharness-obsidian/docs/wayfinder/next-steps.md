@@ -29,7 +29,7 @@ This is a read-only classification of the current records, not a new test run or
 - The implementation baseline was staged as six focused commits and pushed to `origin/main`; latest published commit is `b3dcaa1` (`Package GitHub releases with licensing notices`).
 - Root `.gitmodules` and the gitlink are configured at `learnharness-obsidian/upstream/learnharness`; `git submodule status` recognizes pinned revision `3dc8847`.
 - The `lh-adversarial` and `lh-implementer` role snapshots were left untracked and excluded from the public baseline. A local Obsidian-generated `test-vault/.obsidian/core-plugins.json` is also untracked.
-- Previous final verification before those commits passed 60/60 integration tests, build, upstream pin check, 159-note vault validation, and the four selected adversarial suites. The current teacher-UX/settings changes still need their own verification.
+- Previous baseline verification before the latest UI work passed 60/60 integration tests, build, upstream pin check, 159-note vault validation, and the four selected adversarial suites. The 30 October adaptive-UX/audio implementation now has separate 76/76, build, vault, harness, and desktop-observation evidence in [`docs/test-results.md`](../test-results.md). Physical microphone, provider, and mobile checks remain open.
 
 ## 1. Record the accepted product decisions
 
@@ -49,7 +49,7 @@ Build an R01–R15 evidence checklist from the acceptance column in [`docs/requi
 ## 3. Complete the platform and live-session evidence
 
 - R15/R07: verify migration of legacy JSON/backup history, preserve native records/settings across restart, and test sequential device handoff and conflicts without silently discarding a branch.
-- R09: perform browser-bundle checks and controlled desktop smoke, then physical iOS 15 and Android 5.1 phone runs. Record device, OS, Obsidian version, exact flows, and failures. Enable/claim mobile only after the floors pass.
+- R09: adaptive progress, Markdown question rendering, offline answer feedback, and the Windows/RDP no-device diagnostic have desktop evidence. Perform physical Windows/RDP microphone validation, then physical iOS 15 and Android 5.1 plugin runs. Record device, OS, Obsidian version, exact flows, and failures. Enable/claim mobile only after the floors pass.
 - R06: offline tests cover shared worst-case reservations across provider paths, usage settlement and fail-closed policy checks. Before a live run, recheck pricing and obtain separate authorization and credential availability. Never put credentials or personal vault notes in the repo.
 - R08: close gaps with reproducible real-Obsidian Vault API persistence/failure evidence and an explicit mobile bundle check.
 
