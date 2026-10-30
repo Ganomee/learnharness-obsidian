@@ -9,13 +9,13 @@ The main path is a live, adaptive conversation with the original LearnHarness pr
 ## Start a live adaptive lesson
 
 1. In Obsidian, choose **LearnHarness Lab: Open learning workspace** from the command palette, or click the graduation-cap ribbon icon.
-2. In **Settings → Community plugins → LearnHarness Lab**, select or create your DeepSeek API key in Obsidian SecretStorage. Do this once per Obsidian profile. The key is kept by SecretStorage and is not written into session Markdown.
+2. In **Settings → Community plugins → LearnHarness Lab**, connect two separate services: **Teacher · DeepSeek text model** creates questions and evaluates answers, while **Speech to text · Deepgram** transcribes microphone input. Select or create each key in Obsidian SecretStorage. The teacher key is required for an adaptive lesson; the Deepgram key is optional, and typing still works without it. Neither key is written into session Markdown.
 3. In the workspace, choose **New session · choose teacher**. The default is **Adaptive LearnHarness teacher · DeepSeek**. Describe the topic, what you currently think, what feels unclear, and what you want to be able to do. Use **Speak your goal** if you prefer to talk.
-4. The original LearnHarness prober starts by asking about your understanding. The original teacher uses your answers and reasoning to plan and adapt the next questions, explanations, and tasks. Respond in your own words; speech transcripts can be reviewed before sending.
+4. The original LearnHarness prober starts by asking about your understanding. The original teacher uses your answers and reasoning to plan and adapt the next questions, explanations, and tasks. With Deepgram configured, opening a question starts local microphone voice detection automatically. Allow microphone access, speak naturally, and the transcript updates live in the answer or reasoning field. You can pause listening, edit the transcript, and submit it; the teacher receives it only when you submit. To dictate the initial goal, press **Enable live goal dictation** first.
 5. Prediction prompts and checks help you retrieve and apply the idea. For a check after an explanation, open the question when you are ready. The teacher processes your answer and adjusts the lesson from the evidence.
 6. Choose a saved session to resume it, including after restarting Obsidian. Session content and recovery state are stored as Markdown in this vault.
 
-The live teacher sends learning-session content to DeepSeek when you start and continue a lesson. Provider usage may incur charges. Voice input uses the browser's speech service when available; you can always type instead.
+The live teacher sends learning-session content to DeepSeek when you start and continue a lesson. Deepgram receives voice audio only while local voice detection identifies speech; raw audio is not saved in the vault. Current Deepgram Nova-3 multilingual promotional pricing is about US$0.35 per audio hour, billed by audio duration; rates can change. See [Deepgram pricing](https://deepgram.com/pricing). Microphone access is requested by Obsidian, and you can always pause it or type instead. Without a Deepgram key, the existing host speech-recognition option may be available.
 
 ## Try the fixed offline walkthrough
 

@@ -26,7 +26,7 @@ export default class LearnHarnessLab extends Plugin {
         new Notice('LearnHarness settings could not be loaded. Configure the provider key again in plugin settings.', 10000);
       });
     this.addSettingTab(new LearnHarnessSettingsTab(this.app, this));
-    this.registerView(LEARNING_VIEW, leaf => new LearningView(leaf, this.sessionController(), () => this.getDeepSeekApiKey()));
+    this.registerView(LEARNING_VIEW, leaf => new LearningView(leaf, this.sessionController(), () => this.getDeepSeekApiKey(), () => this.getDeepgramApiKey()));
     this.registerView(GLOBAL_GRAPH_VIEW, leaf => new GlobalGraphView(leaf));
     this.registerHoverLinkSource(GLOBAL_GRAPH_VIEW, { display: 'LearnHarness Lab', defaultMod: false });
     this.addCommand({ id: 'open-learning', name: 'Open learning workspace', callback: () => { void this.openLearning(); } });
@@ -48,9 +48,20 @@ export default class LearnHarnessLab extends Plugin {
     this.settings = next;
   }
 
+  async setDeepgramSecretId(value: string): Promise<void> {
+    const next = { ...this.settings, deepgramSecretId: value };
+    await this.saveData(next);
+    this.settings = next;
+  }
+
   getDeepSeekApiKey(): string | null {
     if (!this.settings.deepSeekSecretId) return null;
     return this.app.secretStorage.getSecret(this.settings.deepSeekSecretId);
+  }
+
+  getDeepgramApiKey(): string | null {
+    if (!this.settings.deepgramSecretId) return null;
+    return this.app.secretStorage.getSecret(this.settings.deepgramSecretId);
   }
 
   private sessionController(): SessionController {

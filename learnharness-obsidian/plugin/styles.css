@@ -88,3 +88,5 @@
 .lh-global-canvas:active { cursor: grabbing; }
 .lh-global-count { flex: 0 0 auto; padding: 5px 14px; border-top: 1px solid var(--background-modifier-border); color: var(--text-muted); font-size: var(--font-small); }
 @media (max-width: 600px) { .lh-learning { padding: 12px; } .lh-header { padding: 18px; } .lh-controls { padding: 10px; } .lh-learning button { min-height: 44px; } .lh-question { padding: 12px; } .lh-global-toolbar { padding: 10px; } .lh-global-controls button { min-height: 40px; } .lh-progress ol { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.lh-live-voice { align-items: flex-start; }
+.lh-live-transcript { min-height: 1.4em; margin-top: .3rem; color: var(--text-accent); font-size: .9em; white-space: pre-wrap; }

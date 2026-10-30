@@ -2,6 +2,12 @@
 
 Updated: 30 October 2026
 
+## 30 October 2026: separate Deepgram speech-to-text service
+
+- Added Deepgram Nova-3 multilingual live transcription as a separate service from the DeepSeek text model that drives the original LearnHarness teacher. Plugin settings now label each role clearly and let each select its own Obsidian SecretStorage entry. The user's Deepgram secret is linked in the disposable test-vault profile; the masked UI confirms both role-specific keys are selected. No provider request was made to validate either key.
+- With Deepgram configured, a teacher question opens local microphone voice detection by default. Only voice-detected audio frames are sent to Deepgram; interim text is previewed live and finalized text is inserted into the editable answer/reasoning field. The learner can pause, edit and submit. The teacher receives the transcript only after submission. Goal dictation uses an explicit start button. Raw audio is not persisted to Markdown. Without Deepgram, typed input remains available.
+- Documented the provider split and setup in the README, developer-provider guide and disposable vault Quick start. Deepgram's current promotional multilingual estimate is about US$0.35 per audio hour; pricing may change. Added regression coverage for URL construction, PCM conversion, voice activity level and transcript parsing. Microphone capture and live provider connectivity remain unverified end to end; the $10 ceiling is not authorization for a provider request.
+
 ## 30 October 2026: adaptive teacher path and local provider setup
 
 - User clarified that the product must be the original model-driven LearnHarness prober/teacher flow, not the scripted walkthrough or an AI pretending to be the learner. The pinned source confirms a one-question-at-a-time probe, an evidence-based plan, then short motivated teaching steps with adaptive checks and plan revisions. The plugin already calls those original factories; the learner-facing screen has now been revised to make that live path primary, keep the fixed demo explicit, remove AI-learner roleplay from the active learning flow, reveal teacher checks after prose, and capture optional thinking-while-reading separately.
