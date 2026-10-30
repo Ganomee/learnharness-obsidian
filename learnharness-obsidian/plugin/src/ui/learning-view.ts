@@ -1,10 +1,11 @@
-import { ItemView, requestUrl, type WorkspaceLeaf } from 'obsidian';
+import { Component, ItemView, MarkdownRenderer, requestUrl, type WorkspaceLeaf } from 'obsidian';
 import { SessionController, type SessionView, type AnswerRequest, type SessionEngine } from '../session-controller';
 import { createDeepSeekEngine, createObsidianFetch } from '../adapters/deepseek-engine';
-import { startDeepgramLiveCapture, type DeepgramLiveCapture, type LiveTranscriptionState } from '../adapters/deepgram-live';
+import { startDeepgramLiveCapture, type AudioInputDevice, type DeepgramLiveCapture, type LiveTranscriptionState } from '../adapters/deepgram-live';
 import { createDemoEngine } from '../adapters/demo-engine';
 import { matchSpokenChoice, startSpeechCapture, type SpeechCapture, type SpeechWindow } from './speech-input';
 import { userFacingTextOf } from '../../../upstream/learnharness/src/core/native-messages.ts';
+import { answerFeedback, deriveLearningProgress, phaseLabel, planNodeProgress } from './learning-progress';
 
 export const LEARNING_VIEW = 'learnharness-learning';
 const DEMO_GOAL = 'Understand how to combine success rates across groups of different sizes';
@@ -22,6 +23,7 @@ export class LearningView extends ItemView {
   private statusEl?: HTMLElement;
   private recoveryId = '';
   private speechCapture?: SpeechCapture;
+  private markdownComponents: Component[] = [];
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -131,13 +133,17 @@ export class LearningView extends ItemView {
     row.dataset.voiceState = autoStart ? 'requesting-microphone' : 'stopped';
     const indicator = row.createSpan({ cls: 'lh-voice-indicator', attr: { 'aria-hidden': 'true' } });
     const button = row.createEl('button', { text: autoStart ? 'Starting mic…' : 'Start voice', attr: { type: 'button', 'aria-label': autoStart ? 'Pause microphone' : 'Start voice input' } });
+    const devicePicker = parent.createEl('select', { cls: 'lh-mic-device-picker', attr: { 'aria-label': 'Microphone input device', 'data-lh-testid': 'microphone-device' } });
+    devicePicker.createEl('option', { value: '', text: 'System microphone' });
+    devicePicker.hidden = true;
+    let selectedDeviceId = '';
     const status = row.createSpan({ cls: 'lh-dictation-status', text: autoStart ? 'Requesting microphone · audio stays local while silent' : 'Voice input is ready when you need it.', attr: { role: 'status', 'aria-live': 'polite' } });
     const meter = row.createSpan({ cls: 'lh-voice-meter', attr: { 'aria-hidden': 'true' } });
     for (let index = 0; index < 5; index++) meter.createSpan();
     const preview = parent.createDiv({ cls: 'lh-live-transcript', attr: { 'aria-live': 'polite', 'aria-label': 'Live speech transcript' } });
     button.disabled = this.busy;
 
-    const start = () => {
+    const start = (requestedDevice = selectedDeviceId) => {
       const key = this.getDeepgramApiKey()?.trim();
       if (!key) {
         row.dataset.voiceState = 'error';
@@ -182,10 +188,29 @@ export class LearningView extends ItemView {
             preview.setText(`Added to answer: ${update.finalTranscript}`);
           }
         },
+        devices: (devices: AudioInputDevice[], activeDeviceId) => {
+          const active = activeDeviceId || requestedDevice;
+          if (active) selectedDeviceId = active;
+          devicePicker.empty();
+          devicePicker.createEl('option', { value: '', text: 'System microphone' });
+          for (const device of devices) devicePicker.createEl('option', { value: device.deviceId, text: device.label });
+          devicePicker.value = devices.some(device => device.deviceId === active) ? active : '';
+          devicePicker.hidden = devices.length === 0;
+          const selected = devices.find(device => device.deviceId === devicePicker.value);
+          status.setText(selected ? `${stateText[row.dataset.voiceState as LiveTranscriptionState] ?? stateText.listening} · ${selected.label}` : stateText[row.dataset.voiceState as LiveTranscriptionState] ?? stateText.listening);
+        },
         error: message => { status.setText(message); },
-      });
+      }, undefined, requestedDevice || undefined);
       this.speechCapture = capture;
     };
+
+    devicePicker.addEventListener('change', () => {
+      selectedDeviceId = devicePicker.value;
+      const current = this.speechCapture as DeepgramLiveCapture | undefined;
+      current?.stop();
+      if (this.speechCapture === current) this.speechCapture = undefined;
+      start(selectedDeviceId);
+    });
 
     button.addEventListener('click', () => {
       if (this.speechCapture) {
@@ -201,6 +226,8 @@ export class LearningView extends ItemView {
   private render(): void {
     if (this.error.startsWith('No DeepSeek key is selected.') && this.getApiKey()?.trim()) this.error = '';
     const root = this.contentEl;
+    for (const component of this.markdownComponents) this.removeChild(component);
+    this.markdownComponents = [];
     root.empty(); root.addClass('lh-learning'); root.setAttribute('data-lh-testid', 'learning-view');
     const header = root.createDiv({ cls: 'lh-header' });
     header.createEl('h2', { text: 'LearnHarness' });
@@ -229,7 +256,7 @@ export class LearningView extends ItemView {
       const transcriptionConnected = !!this.getDeepgramApiKey()?.trim();
       controls.createEl('p', {
         text: connected
-          ? `Live teacher connected. The original LearnHarness prober and teacher adapt to your answers and reasoning. ${transcriptionConnected ? 'Deepgram live transcription is configured and automatically listens while questions are open; pause it any time.' : 'Set a Deepgram key in plugin settings to enable automatic live transcription.'} Keys are selected from Obsidian SecretStorage; they are not copied into session notes.`
+          ? `Adaptive teacher ready. The original LearnHarness prober and teacher adapt to your answers and reasoning when a session starts. ${transcriptionConnected ? 'Deepgram live transcription is configured to start while questions are open; microphone availability and status are shown on each question.' : 'Set a Deepgram key in plugin settings to enable automatic live transcription.'} Keys are selected from Obsidian SecretStorage; they are not copied into session notes.`
           : 'This is the real adaptive teacher path. First select or create your DeepSeek key once in Settings → Community plugins → LearnHarness Lab. The key is read from Obsidian SecretStorage, not from session notes.',
         cls: connected ? 'lh-provider-ready' : 'lh-muted',
       });
@@ -302,6 +329,19 @@ export class LearningView extends ItemView {
           const item = progressList.createEl('li', { cls: index < progress.done ? 'is-done' : index === progress.done ? 'is-current' : '' });
           item.createSpan({ text: step });
         });
+      } else {
+        const path = deriveLearningProgress(this.session.record.messages as any[], (this.session.record as any).tree);
+        const progressCard = root.createDiv({ cls: 'lh-progress lh-adaptive-progress', attr: { 'data-lh-testid': 'adaptive-progress', 'data-phase': path.phase } });
+        progressCard.createDiv({ text: 'YOUR LEARNING PATH', cls: 'lh-eyebrow' });
+        progressCard.createDiv({ text: `Step ${path.phaseIndex + 1} of 3 · ${phaseLabel(path.phase)}`, cls: 'lh-progress-count' });
+        const progressList = progressCard.createEl('ol', { attr: { 'aria-label': 'Learning phases' } });
+        const phases = ['Starting point', 'Teacher plan', 'Learn and check'];
+        phases.forEach((step, index) => {
+          const item = progressList.createEl('li', { cls: index < path.phaseIndex ? 'is-done' : index === path.phaseIndex ? 'is-current' : '', attr: { 'aria-current': index === path.phaseIndex ? 'step' : undefined } });
+          item.createSpan({ text: step });
+        });
+        if (path.phase === 'probe' && path.probeAsked) progressCard.createDiv({ text: `${path.probeAnswered} of ${path.probeAsked} starting-point questions answered`, cls: 'lh-muted' });
+        if (path.phase === 'teach' && path.checksAnswered) progressCard.createDiv({ text: `${path.checksAnswered} checks answered · ${path.checksCorrect} correct so far`, cls: 'lh-muted' });
       }
       root.createEl('p', { text: `Saved revision ${this.session.revision} · ${this.session.status}`, cls: 'lh-muted' });
       const transcript = root.createDiv({ cls: 'lh-transcript', attr: { 'aria-label': 'Learning conversation' } });
@@ -314,12 +354,13 @@ export class LearningView extends ItemView {
           if (text) this.bubble(transcript, 'LearnHarness', text);
         } else if (message.role === 'toolResult' && message.details?.kind && !message.isError) {
           const answer = message.details;
-          const text = [answer.questionText, answer.dontKnow ? 'I don’t know' : answer.text ?? answer.answers?.map((item: any) => item.label).join(', '), answer.thinking ? `My reasoning: ${answer.thinking}` : '', answer.correct === undefined ? '' : answer.correct ? 'Correct' : 'Not yet correct', answer.explanation ?? ''].filter(Boolean).join('\n\n');
-          this.bubble(transcript, 'Saved answer', text);
+          const call = (this.session.record.messages as any[]).flatMap(message => message.role === 'assistant' && Array.isArray(message.content) ? message.content : [])
+            .find(block => block.type === 'toolCall' && block.id === message.toolCallId);
+          this.answerCard(transcript, answer, call?.name);
         }
       }
       const tree = (this.session.record as any).tree;
-      if (tree?.nodes?.length) this.renderPlan(root, tree);
+      if (tree?.nodes?.length) this.renderPlan(root, tree, this.session.providerMode === 'deepseek' ? deriveLearningProgress(this.session.record.messages as any[], tree) : undefined);
       if (progress.complete) {
         const finish = root.createDiv({ cls: 'lh-complete', attr: { role: 'status' } });
         finish.createDiv({ text: 'LESSON COMPLETE', cls: 'lh-eyebrow' });
@@ -355,7 +396,45 @@ export class LearningView extends ItemView {
 
   private bubble(parent: HTMLElement, author: string, text: string): void {
     const bubble = parent.createDiv({ cls: 'lh-message' });
-    bubble.createEl('strong', { text: author }); bubble.createDiv({ text, cls: 'lh-message-text' });
+    bubble.createEl('strong', { text: author }); this.markdown(bubble, text, 'lh-message-text');
+  }
+  private markdown(parent: HTMLElement, source: string, cls: string): HTMLElement {
+    const content = parent.createDiv({ cls });
+    const component = new Component();
+    this.addChild(component);
+    this.markdownComponents.push(component);
+    void MarkdownRenderer.render(this.app, source, content, 'Home.md', component);
+    return content;
+  }
+  private answerCard(parent: HTMLElement, answer: any, toolName?: string): void {
+    const feedback = answerFeedback(answer, toolName);
+    const card = parent.createDiv({ cls: `lh-answer-card${answer.kind === 'quiz' ? (answer.correct ? ' is-correct' : ' is-review') : ''}`, attr: { 'data-answer-kind': answer.kind ?? 'unknown' } });
+    const label = card.createDiv({ cls: 'lh-answer-label' });
+    label.createSpan({ text: feedback.label });
+    if (feedback.verdict) label.createSpan({ text: ` · ${feedback.verdict}`, cls: answer.correct ? 'lh-verdict-correct' : 'lh-verdict-review' });
+    card.createDiv({ text: answer.questionText ?? '', cls: 'lh-answer-question' });
+    if (feedback.response) this.markdown(card, feedback.response, 'lh-answer-response');
+    if (feedback.choices.length) {
+      const choices = card.createEl('ul', { cls: 'lh-answer-choices', attr: { 'aria-label': 'Answer feedback' } });
+      for (const choice of feedback.choices) {
+        const item = choices.createEl('li', { cls: choice.correct ? 'is-answer-correct' : choice.selected ? 'is-answer-selected' : '' });
+        item.createSpan({ text: `${choice.selected ? 'Your choice' : ''}${choice.correct ? (choice.selected ? ' · ' : '') + 'Correct answer' : ''}${!choice.selected && !choice.correct ? 'Option' : ''}: ` });
+        this.markdown(item, choice.label, 'lh-answer-choice-text');
+      }
+    }
+    if (feedback.thinking) {
+      const thinking = card.createEl('details'); thinking.createEl('summary', { text: 'Your reasoning' });
+      this.markdown(thinking, feedback.thinking, 'lh-message-text');
+    }
+    if (feedback.confidence !== undefined) card.createDiv({ text: `Your confidence: ${feedback.confidence}%`, cls: 'lh-muted' });
+    if (feedback.explanation) {
+      const why = card.createEl('details'); why.createEl('summary', { text: answer.correct === false ? 'See the correction' : 'Why this works' });
+      this.markdown(why, feedback.explanation, 'lh-message-text');
+    }
+    if (feedback.referenceAnswer) {
+      const commitment = card.createEl('details'); commitment.createEl('summary', { text: 'Teacher’s reference answer' });
+      this.markdown(commitment, feedback.referenceAnswer, 'lh-message-text');
+    }
   }
   private demoProgress(session: SessionView): { done: number; complete: boolean; steps: string[] } {
     const messages = session.record.messages as any[];
@@ -372,9 +451,13 @@ export class LearningView extends ItemView {
     const steps = ['Share your starting idea', 'Review the teacher’s two-step plan', 'Make a prediction', 'Check the idea in a new example'];
     return { done: flags.filter(Boolean).length, complete, steps };
   }
-  private renderPlan(root: HTMLElement, tree: { nodes: Array<{ id: string; title: string; summary?: string }>; edges: Array<{ from: string; to: string }> }): void {
+  private renderPlan(root: HTMLElement, tree: { nodes: Array<{ id: string; title: string; summary?: string }>; edges: Array<{ from: string; to: string }> }, progress?: ReturnType<typeof deriveLearningProgress>): void {
     const card = root.createDiv({ cls: 'lh-plan' });
     card.createEl('h3', { text: 'Teacher plan · prerequisite graph' });
+    if (progress) {
+      const statuses = planNodeProgress(tree as any, progress);
+      card.createDiv({ text: `${statuses.filter(node => node.status === 'visited').length} teacher-visited · ${statuses.filter(node => node.status === 'current').length} current · ${statuses.filter(node => node.status === 'upcoming').length} upcoming. Position follows the teacher’s checks; it is not a mastery score.`, cls: 'lh-muted' });
+    }
     const titles = new Map(tree.nodes.map(node => [node.id, node.title]));
     const children = new Map(tree.nodes.map(node => [node.id, [] as string[]]));
     const depth = new Map(tree.nodes.map(node => [node.id, 0]));
@@ -427,9 +510,10 @@ export class LearningView extends ItemView {
       line.setAttribute('d', `M ${from.x + 190} ${from.y + 36} C ${from.x + 214} ${from.y + 36}, ${to.x - 24} ${to.y + 36}, ${to.x - 8} ${to.y + 36}`);
       line.setAttribute('marker-end', `url(#lh-arrow-${this.session?.id ?? 'plan'})`); line.classList.add('lh-plan-edge'); svg.appendChild(line);
     }
-    for (const node of tree.nodes) {
+    const nodes = progress ? planNodeProgress(tree as any, progress) : tree.nodes.map(node => ({ ...node, status: undefined as 'current' | 'visited' | 'upcoming' | undefined }));
+    for (const node of nodes) {
       const point = positions.get(node.id); if (!point) continue;
-      const group = document.createElementNS(svgNs, 'g'); group.classList.add('lh-plan-node');
+      const group = document.createElementNS(svgNs, 'g'); group.classList.add('lh-plan-node'); if (node.status) group.classList.add(`is-${node.status}`);
       const rect = document.createElementNS(svgNs, 'rect'); rect.setAttribute('x', `${point.x}`); rect.setAttribute('y', `${point.y}`); rect.setAttribute('width', '190'); rect.setAttribute('height', '72'); rect.setAttribute('rx', '12'); group.appendChild(rect);
       const lines = (node.title.match(/.{1,24}(?:\s|$)|\S+/g) ?? [node.title]).map(line => line.trim()).filter(Boolean).slice(0, 3);
       const text = document.createElementNS(svgNs, 'text'); text.setAttribute('x', `${point.x + 12}`); text.setAttribute('y', `${point.y + 28}`);
@@ -440,7 +524,8 @@ export class LearningView extends ItemView {
     const details = card.createEl('details'); details.createEl('summary', { text: 'Read the plan as a list' });
     const list = details.createEl('ol');
     for (const node of tree.nodes) {
-      const item = list.createEl('li'); item.createEl('strong', { text: node.title });
+      const item = list.createEl('li', { cls: node.status ? `is-${node.status}` : '' }); item.createEl('strong', { text: node.title });
+      if (node.status) item.createEl('small', { text: node.status === 'current' ? 'Current teacher step' : node.status === 'visited' ? 'Teacher has moved on from this node' : 'Upcoming' });
       if (node.summary) item.createEl('p', { text: node.summary });
       const prerequisites = tree.edges.filter(edge => edge.to === node.id).map(edge => titles.get(edge.from) ?? edge.from);
       if (prerequisites.length) item.createEl('small', { text: `Prerequisites: ${prerequisites.join(', ')}` });
@@ -465,16 +550,16 @@ export class LearningView extends ItemView {
     const reveal = behindReveal ? host.createEl('details', { cls: 'lh-check-reveal' }) : undefined;
     reveal?.createEl('summary', { text: question.kind === 'ask' ? 'Open the teacher’s question' : 'Check your understanding' });
     const card = (reveal ?? host).createDiv({ cls: 'lh-question' });
-    card.createEl('h3', { text: question.question });
-    if (question.context) card.createEl('p', { text: question.context });
+    this.markdown(card, question.question, 'lh-question-text');
+    if (question.context) this.markdown(card, question.context, 'lh-question-context');
     const selection = new Set<string>();
     for (const option of question.options) {
       const row = card.createEl('label', { cls: 'lh-option' });
       const input = row.createEl('input', { type: question.mode === 'multi-select' ? 'checkbox' : 'radio', attr: { name: `question-${question.id}`, value: option.value } });
       input.disabled = this.busy;
       input.addEventListener('change', () => { if (question.mode !== 'multi-select') selection.clear(); if (input.checked) selection.add(option.value); else selection.delete(option.value); });
-      row.createSpan({ text: option.label });
-      if (option.description) row.createEl('small', { text: option.description });
+      this.markdown(row, option.label, 'lh-option-text');
+      if (option.description) this.markdown(row, option.description, 'lh-option-description');
     }
     const freeText = question.mode === 'text' || question.kind === 'ask' ? card.createEl('textarea', { attr: { rows: '2', 'aria-label': 'Your answer', placeholder: 'Your answer' } }) : undefined;
     if (freeText) freeText.disabled = this.busy;

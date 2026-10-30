@@ -23,6 +23,17 @@ export interface DeepgramLiveCapture {
   finish(): Promise<void>;
 }
 
+export interface AudioInputDevice { deviceId: string; label: string }
+
+export function describeMicrophoneError(error: unknown): string {
+  if (error instanceof Error && error.name === 'NotAllowedError') return 'Microphone permission was denied. Allow microphone access for Obsidian, then retry or type your answer.';
+  if (error instanceof Error && error.name === 'NotFoundError') return 'No microphone input is available to Obsidian. Check the Windows/RDP microphone input device and retry.';
+  if (error instanceof Error && error.name === 'OverconstrainedError') return 'That microphone is no longer available. Choose another input device and retry.';
+  if (error instanceof Error && error.name === 'NotReadableError') return 'The microphone could not be opened. Close other apps using it, then retry.';
+  if (error instanceof Error) return error.message;
+  return 'Could not start microphone capture. Type your response or retry.';
+}
+
 export interface DeepgramMessage {
   segment: string;
   isFinal: boolean;
@@ -43,6 +54,7 @@ interface LiveSocket {
 /** Internal seams let the same capture lifecycle run with deterministic fakes in tests. */
 export interface DeepgramLiveDependencies {
   getUserMedia?: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
+  enumerateDevices?: () => Promise<MediaDeviceInfo[]>;
   createAudioContext?: () => AudioContext;
   createWebSocket?: (url: string, protocols: string[]) => LiveSocket;
 }
@@ -125,9 +137,11 @@ export function startDeepgramLiveCapture(
   handlers: {
     state(state: LiveTranscriptionState, detail?: string): void;
     transcript(update: LiveTranscriptUpdate): void;
+    devices?(devices: AudioInputDevice[], selectedDeviceId: string): void;
     error(message: string): void;
   },
   dependencies: DeepgramLiveDependencies = {},
+  deviceId?: string,
 ): DeepgramLiveCapture {
   let stopped = false;
   let stream: MediaStream | undefined;
@@ -326,8 +340,15 @@ export function startDeepgramLiveCapture(
         if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone capture is unavailable in this Obsidian environment.');
         return navigator.mediaDevices.getUserMedia(constraints);
       });
-      stream = await getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      const audio: MediaTrackConstraints = { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+      if (deviceId) audio.deviceId = { exact: deviceId };
+      stream = await getUserMedia({ audio });
       if (stopped) { releaseMicrophone(); return; }
+      try {
+        const enumerate = dependencies.enumerateDevices ?? (() => navigator.mediaDevices.enumerateDevices());
+        const devices = (await enumerate()).filter(device => device.kind === 'audioinput').map(device => ({ deviceId: device.deviceId, label: device.label || 'Microphone' }));
+        handlers.devices?.(devices, stream.getAudioTracks()[0]?.getSettings().deviceId ?? deviceId ?? '');
+      } catch { /* enumeration is an enhancement; a working default stream remains usable */ }
 
       const createAudioContext = dependencies.createAudioContext ?? (() => {
         const browser = window as Window & { webkitAudioContext?: typeof AudioContext };
@@ -346,12 +367,7 @@ export function startDeepgramLiveCapture(
       source.connect(processor); processor.connect(mute); mute.connect(context.destination);
       state('listening', 'Microphone on · waiting for speech. Audio is not sent while silent.');
     } catch (error) {
-      const message = error instanceof Error && error.name === 'NotAllowedError'
-        ? 'Microphone permission was denied. Allow microphone access in Obsidian, or type your response.'
-        : error instanceof Error
-          ? error.message
-          : 'Could not start microphone capture. Type your response or retry.';
-      fail(message);
+      fail(describeMicrophoneError(error));
     }
   };
 

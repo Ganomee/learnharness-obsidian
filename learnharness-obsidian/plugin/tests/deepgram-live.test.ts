@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { audioRms, deepgramListenUrl, floatToLinear16, parseDeepgramMessage, startDeepgramLiveCapture, type LiveTranscriptionState } from '../src/adapters/deepgram-live';
+import { audioRms, deepgramListenUrl, describeMicrophoneError, floatToLinear16, parseDeepgramMessage, startDeepgramLiveCapture, type AudioInputDevice, type LiveTranscriptionState } from '../src/adapters/deepgram-live';
 
 test('Deepgram streaming targets the fixed Listen endpoint with live multilingual interim results', () => {
   const url = new URL(deepgramListenUrl());
@@ -26,6 +26,46 @@ test('microphone floats are resampled to bounded signed 16-bit PCM', () => {
 test('voice activity energy is stable for silence and audible speech', () => {
   assert.equal(audioRms(new Float32Array(16)), 0);
   assert.ok(Math.abs(audioRms(new Float32Array(4).fill(0.5)) - 0.5) < 1e-6);
+});
+
+test('microphone failures distinguish absent input, permission denial, busy hardware, and stale device selection', () => {
+  assert.match(describeMicrophoneError(new DOMException('', 'NotFoundError')), /No microphone input.*Windows\/RDP/i);
+  assert.match(describeMicrophoneError(new DOMException('', 'NotAllowedError')), /permission was denied/i);
+  assert.match(describeMicrophoneError(new DOMException('', 'NotReadableError')), /Close other apps/i);
+  assert.match(describeMicrophoneError(new DOMException('', 'OverconstrainedError')), /no longer available/i);
+});
+
+test('selected microphone is requested explicitly and available input labels are reported', async () => {
+  let requested: MediaStreamConstraints | undefined;
+  const devices: AudioInputDevice[] = [];
+  const context = {
+    sampleRate: 48_000, state: 'running', destination: {}, async resume() {}, async close() {},
+    createMediaStreamSource: () => ({ connect() {}, disconnect() {} }),
+    createScriptProcessor: () => ({ onaudioprocess: null, connect() {}, disconnect() {} }),
+    createGain: () => ({ gain: { value: 1 }, connect() {}, disconnect() {} }),
+  };
+  const track = { stop() {}, getSettings: () => ({ deviceId: 'usb-mic' }) };
+  const capture = startDeepgramLiveCapture('test-key', {
+    state: () => {}, transcript: () => {}, error: message => assert.fail(message),
+    devices: (found, active) => { devices.push(...found); assert.equal(active, 'usb-mic'); },
+  }, {
+    getUserMedia: async constraints => { requested = constraints; return { getTracks: () => [track], getAudioTracks: () => [track] } as unknown as MediaStream; },
+    enumerateDevices: async () => [{ kind: 'audioinput', deviceId: 'usb-mic', label: 'USB classroom microphone' } as MediaDeviceInfo],
+    createAudioContext: () => context as unknown as AudioContext,
+  }, 'usb-mic');
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual((requested?.audio as MediaTrackConstraints).deviceId, { exact: 'usb-mic' });
+  assert.deepEqual(devices, [{ deviceId: 'usb-mic', label: 'USB classroom microphone' }]);
+  capture.stop();
+});
+
+test('no exposed microphone endpoint yields actionable Windows/RDP setup guidance', async () => {
+  let error = '';
+  startDeepgramLiveCapture('test-key', {
+    state: () => {}, transcript: () => {}, error: message => { error = message; },
+  }, { getUserMedia: async () => { throw new DOMException('no input', 'NotFoundError'); } });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.match(error, /No microphone input is available to Obsidian.*Windows\/RDP/i);
 });
 
 test('Deepgram interim and final transcript payloads are parsed without leaking provider metadata', () => {
