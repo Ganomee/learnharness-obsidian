@@ -1,32 +1,39 @@
-# Five-minute demo
+---
+type: guide
+tags: [learnharness, quick-start]
+---
+# Start learning with LearnHarness
 
-This vault includes an offline example lesson, an open-topic DeepSeek teacher mode, and a separate set of hand-authored notes. The offline lesson is scripted; choose DeepSeek Flash to set any learning goal and let the original LearnHarness prober and teacher adapt the course to your answers.
+The main path is a live, adaptive conversation with the original LearnHarness prober and teacher. A separate fixed offline walkthrough is available for checking the Obsidian interface without a provider.
 
-## Try the interactive lesson
+## Start a live adaptive lesson
 
 1. In Obsidian, choose **LearnHarness Lab: Open learning workspace** from the command palette, or click the graduation-cap ribbon icon.
-2. Start **Why averaging two rates can mislead**. The preview runs the original LearnHarness prober and teacher with a deterministic local demo provider.
-3. Answer the starting probe and include your reasoning. Review the saved two-step plan, make a prediction, read the teacher explanation, then answer the transfer check.
-4. Watch the four-step progress indicator. The completion panel confirms the transcript, answers, confidence and plan are saved in this vault. Use **Open the lesson notes** for the linked reference or **Start another session** to begin again.
-5. Reopen **Saved sessions** to resume a prior session. Session records and prior recovery snapshots are stored in this vault under `LearnHarness/`.
+2. In **Settings → Community plugins → LearnHarness Lab**, select or create your DeepSeek API key in Obsidian SecretStorage. Do this once per Obsidian profile. The key is kept by SecretStorage and is not written into session Markdown.
+3. In the workspace, choose **New session · choose teacher**. The default is **Adaptive LearnHarness teacher · DeepSeek**. Describe the topic, what you currently think, what feels unclear, and what you want to be able to do. Use **Speak your goal** if you prefer to talk.
+4. The original LearnHarness prober starts by asking about your understanding. The original teacher uses your answers and reasoning to plan and adapt the next questions, explanations, and tasks. Respond in your own words; speech transcripts can be reviewed before sending.
+5. Prediction prompts and checks help you retrieve and apply the idea. For a check after an explanation, open the question when you are ready. The teacher processes your answer and adjusts the lesson from the evidence.
+6. Choose a saved session to resume it, including after restarting Obsidian. Session content and recovery state are stored as Markdown in this vault.
 
-## Simulate both roles with DeepSeek
+The live teacher sends learning-session content to DeepSeek when you start and continue a lesson. Provider usage may incur charges. Voice input uses the browser's speech service when available; you can always type instead.
 
-1. Choose **DeepSeek Flash · paid API** in the learning workspace and enter your key in the password field. It stays in memory only and clears when the view closes.
-2. Set the **AI learner profile** to a synthetic student's current knowledge and likely misconception. Do not include personal student data.
-3. Start a goal. DeepSeek Flash runs the original LearnHarness prober and teacher. When a question appears, choose **Let AI learner answer · 1 request**; a separate bounded request generates the student's answer, then the original teacher processes and grades it.
-4. The synthetic learner request is limited to 512 output tokens with no retry. It receives the goal, current question/options and profile, but not the answer key or teacher explanation. The teacher request also sends the session to DeepSeek. Both roles use the same provider/model.
-5. For your own session, answer a question by voice with **Speak answer** when the Obsidian browser supports speech recognition. It transcribes into the answer or reasoning field, may select a clearly matched choice, and keeps the words visible for review before submission. Speech recognition uses the browser's speech service and may send audio to that service; only its text transcript is sent to DeepSeek with your submitted learning session.
+## Try the fixed offline walkthrough
+
+1. In the workspace, change **Learning mode** to **Fixed scripted demo · offline**.
+2. Start **Why averaging two rates can mislead**.
+3. Answer the probe, review the plan, make a prediction, read the explanation, then try the transfer check.
+
+This walkthrough is a fixed interface example. It does not adapt the lesson to your answers and does not use an AI learner roleplay.
 
 ## Explore the notes
 
-1. Open [[20 Sessions/DEMO-001 - Why averages can mislead]]. This is a hand-authored example, separate from the interactive session.
+1. Open [[20 Sessions/DEMO-001 - Why averages can mislead]]. This hand-written example is separate from interactive session records.
 2. Open [[30 Plans/DEMO-001 - Plan]] and follow its prerequisites.
 3. Read the linked proposition notes, then reveal the worked example in the session note.
 4. Complete [[60 Reviews/DEMO - Session reflection]]. This records evidence, not an automatic mastery score.
 5. Create a note in `20 Sessions`, insert the **Learning session** template, and fill in your topic. It is a manual note until an agent session creates its own Vault record.
 
-Use **Daily notes: Open today's daily note** for a dated learning log. Every hand-authored example is marked `DEMO` or `demo: true`.
+Use **Daily notes: Open today's daily note** for a dated learning log. Every hand-written example is marked `DEMO` or `demo: true`.
 
 ## Explore the global graph
 
