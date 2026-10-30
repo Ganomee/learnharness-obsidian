@@ -2,6 +2,12 @@
 
 Updated: 30 October 2026
 
+## 30 October 2026: stabilize voice interaction and compact the lesson view
+
+- Reproduced the user's stopped-looking state in the open Obsidian view: the machine returns `Requested device not found`, and the old control text stayed on Pause. The current PC exposes a Remote Audio render endpoint but no capture endpoint. Updated the live control to show the actual state, action label, error and a compact animated voice meter; the question/answer layout has tighter spacing and smaller cards.
+- Fixed the repeated connection lifecycle: local voice detection is continuous for the question, ordinary pauses stop forwarding audio but keep one Deepgram socket open, and a normal server idle close waits for the next voice before reopening one socket. Only explicit pause, submit, close, or real error stops the microphone. Submit now flushes `CloseStream` and waits up to 1.5 seconds for final words before constructing the saved answer.
+- Added injectable microphone, audio-context and WebSocket seams plus tests for voice start, pauses, socket reuse, normal idle reconnect, final transcript flush, permission failure and cleanup. The real UI was reloaded and exercised; its microphone failure now shows `Requested device not found` with **Retry voice**. The available host exposes no recording endpoint, so no physical acoustic test or live Deepgram transcription could be completed here.
+
 ## 30 October 2026: separate Deepgram speech-to-text service
 
 - Added Deepgram Nova-3 multilingual live transcription as a separate service from the DeepSeek text model that drives the original LearnHarness teacher. Plugin settings now label each role clearly and let each select its own Obsidian SecretStorage entry. The user's Deepgram secret is linked in the disposable test-vault profile; the masked UI confirms both role-specific keys are selected. No provider request was made to validate either key.

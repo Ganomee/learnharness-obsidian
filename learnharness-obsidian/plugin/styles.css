@@ -1,17 +1,17 @@
-.lh-learning { max-width: 860px; margin: 0 auto; padding: 16px; overflow-y: auto; }
-.lh-header { padding: 22px 24px; border-radius: 16px; background: linear-gradient(125deg, var(--interactive-accent), var(--background-modifier-border)); color: var(--text-on-accent); }
-.lh-header h2 { color: inherit; font-size: 1.8em; }
+.lh-learning { max-width: 760px; margin: 0 auto; padding: 12px; overflow-y: auto; }
+.lh-header { padding: 12px 16px; border-radius: 12px; background: linear-gradient(125deg, var(--interactive-accent), var(--background-modifier-border)); color: var(--text-on-accent); }
+.lh-header h2 { color: inherit; font-size: 1.35em; margin: 0 0 2px; }
 .lh-header .lh-muted { color: inherit; opacity: .86; }
-.lh-header h2 { margin-bottom: 4px; }
+.lh-header p { margin: 0; font-size: var(--font-small); }
 .lh-muted { color: var(--text-muted); font-size: var(--font-small); }
-.lh-controls { display: flex; flex-wrap: wrap; gap: 12px; padding: 14px; border: 1px solid var(--background-modifier-border); border-radius: 12px; margin: 16px 0; }
-.lh-learning label { display: flex; flex-direction: column; gap: 6px; }
-.lh-learning textarea { width: 100%; min-height: 72px; resize: vertical; margin-bottom: 10px; }
+.lh-controls { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; border: 1px solid var(--background-modifier-border); border-radius: 10px; margin: 10px 0; }
+.lh-learning label { display: flex; flex-direction: column; gap: 4px; }
+.lh-learning textarea { width: 100%; min-height: 54px; resize: vertical; margin-bottom: 6px; }
 .lh-learning select, .lh-learning input[type=password] { max-width: 100%; width: 100%; }
 .lh-controls > label { flex: 1 1 220px; min-width: 0; }
 .lh-controls > p { flex-basis: 100%; margin: 0; }
 .lh-provider-ready { color: var(--text-success); }
-.lh-question, .lh-message, .lh-plan { border: 1px solid var(--background-modifier-border); border-radius: 12px; padding: 16px; margin: 12px 0; }
+.lh-question, .lh-message, .lh-plan { border: 1px solid var(--background-modifier-border); border-radius: 10px; padding: 12px; margin: 8px 0; }
 .lh-lesson, .lh-progress, .lh-complete { border: 1px solid var(--background-modifier-border); border-radius: 14px; padding: 18px 20px; margin: 14px 0; background: var(--background-secondary); }
 .lh-lesson h3, .lh-complete h3 { margin: 6px 0 10px; }
 .lh-eyebrow { color: var(--interactive-accent); font-size: .76em; font-weight: 750; letter-spacing: .1em; }
@@ -26,9 +26,9 @@
 .lh-complete { border-color: var(--interactive-success); }
 .lh-complete .lh-actions, .lh-complete button { margin-right: 8px; }
 .lh-question { background: var(--background-secondary); }
-.lh-question-gate { margin: 14px 0; }
-.lh-question-gate > textarea { margin-top: 10px; }
-.lh-check-reveal { margin: 10px 0; padding: 12px 14px; border: 1px solid var(--interactive-accent); border-radius: 10px; background: var(--background-secondary); }
+.lh-question-gate { margin: 8px 0; }
+.lh-question-gate > textarea { margin-top: 6px; }
+.lh-check-reveal { margin: 8px 0; padding: 8px 10px; border: 1px solid var(--interactive-accent); border-radius: 9px; background: var(--background-secondary); }
 .lh-check-reveal > summary { cursor: pointer; font-weight: 650; }
 .lh-plan { background: var(--background-secondary); }
 .lh-plan-scroll { overflow-x: auto; padding: 8px 2px 12px; }
@@ -44,10 +44,28 @@
 .lh-plan p { margin: 4px 0; }
 .lh-plan small { color: var(--text-muted); }
 .lh-message-text { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 8px; line-height: 1.55; }
-.lh-learning .lh-option { flex-direction: row; flex-wrap: wrap; align-items: flex-start; padding: 12px; margin: 8px 0; border: 1px solid var(--background-modifier-border); border-radius: 8px; cursor: pointer; }
+.lh-learning .lh-option { flex-direction: row; flex-wrap: wrap; align-items: flex-start; padding: 8px 10px; margin: 5px 0; border: 1px solid var(--background-modifier-border); border-radius: 8px; cursor: pointer; }
 .lh-option input { flex: 0 0 auto; margin-top: 4px; }
-.lh-speech-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 12px; }
-.lh-dictation-status { color: var(--text-muted); font-size: var(--font-small); }
+.lh-speech-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 5px 0 7px; }
+.lh-dictation-status { color: var(--text-muted); font-size: var(--font-small); flex: 1 1 160px; }
+.lh-voice-indicator { width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; background: var(--text-faint); }
+.lh-live-voice[data-voice-state=requesting-microphone] .lh-voice-indicator,
+.lh-live-voice[data-voice-state=listening] .lh-voice-indicator { background: var(--text-success); box-shadow: 0 0 0 3px var(--background-modifier-border); }
+.lh-live-voice[data-voice-state=voice-detected] .lh-voice-indicator,
+.lh-live-voice[data-voice-state=connecting] .lh-voice-indicator,
+.lh-live-voice[data-voice-state=transcribing] .lh-voice-indicator { background: var(--interactive-accent); box-shadow: 0 0 0 3px var(--background-modifier-border); }
+.lh-live-voice[data-voice-state=error] .lh-voice-indicator { background: var(--text-error); }
+.lh-live-voice[data-voice-state=stopped] .lh-voice-indicator { background: var(--text-faint); }
+.lh-voice-meter { display: inline-flex; align-items: center; gap: 2px; height: 16px; }
+.lh-voice-meter span { width: 2px; height: 4px; border-radius: 2px; background: var(--interactive-accent); opacity: .65; }
+.lh-live-voice[data-voice-state=voice-detected] .lh-voice-meter span,
+.lh-live-voice[data-voice-state=connecting] .lh-voice-meter span,
+.lh-live-voice[data-voice-state=transcribing] .lh-voice-meter span { animation: lh-voice-wave .55s ease-in-out infinite alternate; }
+.lh-voice-meter span:nth-child(2) { animation-delay: .1s; }
+.lh-voice-meter span:nth-child(3) { animation-delay: .2s; }
+.lh-voice-meter span:nth-child(4) { animation-delay: .3s; }
+.lh-voice-meter span:nth-child(5) { animation-delay: .4s; }
+@keyframes lh-voice-wave { to { height: 14px; opacity: 1; } }
 .lh-option span { flex: 1; overflow-wrap: anywhere; }
 .lh-option small { flex-basis: 100%; color: var(--text-muted); }
 .lh-actions { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -88,5 +106,5 @@
 .lh-global-canvas:active { cursor: grabbing; }
 .lh-global-count { flex: 0 0 auto; padding: 5px 14px; border-top: 1px solid var(--background-modifier-border); color: var(--text-muted); font-size: var(--font-small); }
 @media (max-width: 600px) { .lh-learning { padding: 12px; } .lh-header { padding: 18px; } .lh-controls { padding: 10px; } .lh-learning button { min-height: 44px; } .lh-question { padding: 12px; } .lh-global-toolbar { padding: 10px; } .lh-global-controls button { min-height: 40px; } .lh-progress ol { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.lh-live-voice { align-items: flex-start; }
-.lh-live-transcript { min-height: 1.4em; margin-top: .3rem; color: var(--text-accent); font-size: .9em; white-space: pre-wrap; }
+.lh-live-voice { align-items: center; }
+.lh-live-transcript { min-height: 0; margin: 2px 0 6px; color: var(--text-accent); font-size: var(--font-small); white-space: pre-wrap; overflow-wrap: anywhere; }

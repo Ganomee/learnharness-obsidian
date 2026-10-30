@@ -1,4 +1,11 @@
-export type LiveTranscriptionState = 'requesting-microphone' | 'listening' | 'connecting' | 'transcribing' | 'stopped' | 'error';
+export type LiveTranscriptionState =
+  | 'requesting-microphone'
+  | 'listening'
+  | 'voice-detected'
+  | 'connecting'
+  | 'transcribing'
+  | 'stopped'
+  | 'error';
 
 export interface LiveTranscriptUpdate {
   transcript: string;
@@ -10,7 +17,10 @@ export interface LiveTranscriptUpdate {
 }
 
 export interface DeepgramLiveCapture {
+  /** Stop immediately, for leaving the view or aborting a session. */
   stop(): void;
+  /** Stop the microphone, flush the final phrase, then close this answer's socket. */
+  finish(): Promise<void>;
 }
 
 export interface DeepgramMessage {
@@ -19,13 +29,33 @@ export interface DeepgramMessage {
   speechFinal: boolean;
 }
 
+interface LiveSocket {
+  readyState: number;
+  binaryType: BinaryType;
+  onopen: ((event: Event) => void) | null;
+  onmessage: ((event: MessageEvent) => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onclose: ((event: CloseEvent) => void) | null;
+  send(data: string | ArrayBuffer): void;
+  close(): void;
+}
+
+/** Internal seams let the same capture lifecycle run with deterministic fakes in tests. */
+export interface DeepgramLiveDependencies {
+  getUserMedia?: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
+  createAudioContext?: () => AudioContext;
+  createWebSocket?: (url: string, protocols: string[]) => LiveSocket;
+}
+
 const OUTPUT_RATE = 16_000;
-const START_RMS = 0.012;
-const STOP_RMS = 0.008;
+const START_RMS = 0.009;
+const STOP_RMS = 0.006;
 const START_FRAMES = 2;
-const STOP_FRAMES = 14;
-const PREROLL_FRAMES = 6;
-const SOCKET_IDLE_MS = 5_000;
+const STOP_FRAMES = 9;
+const PREROLL_FRAMES = 5;
+const MAX_QUEUED_FRAMES = 12;
+const SOCKET_OPEN = 1;
+const SOCKET_CONNECTING = 0;
 
 /** Build a bounded Nova-3 multilingual stream; no key is placed in the URL. */
 export function deepgramListenUrl(): string {
@@ -85,9 +115,10 @@ export function parseDeepgramMessage(data: unknown): DeepgramMessage | undefined
 }
 
 /**
- * Captures microphone audio locally and opens a Deepgram socket only after
- * local voice activity is detected. Raw audio is streamed in memory and never
- * written to the vault. The caller owns the returned handle and must stop it.
+ * Owns one microphone and at most one Deepgram socket for a single answer.
+ * The socket stays open across pauses; silence only changes local VAD state and
+ * sends no audio. The caller's small interface is start + stop, while tests
+ * inject fake browser devices through the internal dependency seam.
  */
 export function startDeepgramLiveCapture(
   apiKey: string,
@@ -96,6 +127,7 @@ export function startDeepgramLiveCapture(
     transcript(update: LiveTranscriptUpdate): void;
     error(message: string): void;
   },
+  dependencies: DeepgramLiveDependencies = {},
 ): DeepgramLiveCapture {
   let stopped = false;
   let stream: MediaStream | undefined;
@@ -103,8 +135,11 @@ export function startDeepgramLiveCapture(
   let source: MediaStreamAudioSourceNode | undefined;
   let processor: ScriptProcessorNode | undefined;
   let mute: GainNode | undefined;
-  let socket: WebSocket | undefined;
-  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let socket: LiveSocket | undefined;
+  let finishTimer: ReturnType<typeof setTimeout> | undefined;
+  let finishResolver: (() => void) | undefined;
+  let finishPromise: Promise<void> | undefined;
+  let finishing = false;
   let speech = false;
   let startFrames = 0;
   let silenceFrames = 0;
@@ -129,45 +164,126 @@ export function startDeepgramLiveCapture(
     });
   };
 
+  const releaseMicrophone = () => {
+    if (processor) { processor.onaudioprocess = null; processor.disconnect(); }
+    source?.disconnect(); mute?.disconnect();
+    stream?.getTracks().forEach(track => track.stop());
+    if (context && context.state !== 'closed') void context.close().catch(() => undefined);
+  };
+
+  const resolveFinish = () => {
+    if (finishTimer) clearTimeout(finishTimer);
+    finishTimer = undefined;
+    const resolve = finishResolver;
+    finishResolver = undefined;
+    resolve?.();
+  };
+
+  const closeFinishedStream = () => {
+    if (stopped) return;
+    stopped = true;
+    const current = socket;
+    socket = undefined;
+    try { current?.close(); } catch { /* socket may already be closing */ }
+    releaseMicrophone();
+    handlers.state('stopped');
+    resolveFinish();
+  };
+
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    resolveFinish();
+    const current = socket;
+    socket = undefined;
+    try { if (current?.readyState === SOCKET_OPEN) current.send(JSON.stringify({ type: 'CloseStream' })); } catch { /* best effort */ }
+    try { current?.close(); } catch { /* socket may already be closing */ }
+    releaseMicrophone();
+    handlers.state('stopped');
+  };
+
+  const finish = (): Promise<void> => {
+    if (stopped) return Promise.resolve();
+    if (finishPromise) return finishPromise;
+    finishing = true;
+    releaseMicrophone();
+    finishPromise = new Promise(resolve => { finishResolver = resolve; });
+    if (!socket || socket.readyState > SOCKET_OPEN) {
+      closeFinishedStream();
+      return finishPromise;
+    }
+    finishTimer = setTimeout(closeFinishedStream, 1500);
+    if (socket.readyState === SOCKET_OPEN) {
+      try { socket.send(JSON.stringify({ type: 'CloseStream' })); }
+      catch { closeFinishedStream(); }
+    }
+    return finishPromise;
+  };
+
   const fail = (message: string) => {
     if (stopped) return;
-    handlers.error(message);
     stop();
+    handlers.error(message);
     handlers.state('error', message);
   };
 
   const connect = () => {
-    if (stopped || socket || typeof WebSocket === 'undefined') return;
-    state('connecting', 'Opening Deepgram live transcription…');
-    let next: WebSocket;
+    if (stopped || socket) return;
+    state('connecting', 'Opening the live transcription connection.');
     try {
-      next = new WebSocket(deepgramListenUrl(), ['token', apiKey]);
-    } catch { fail('Could not connect to Deepgram. Check the key and network, or type your response.'); return; }
-    socket = next;
-    next.binaryType = 'arraybuffer';
-    next.onopen = () => {
-      if (stopped || socket !== next) return;
-      for (const frame of queued.splice(0)) next.send(frame);
-      state('transcribing', 'Deepgram is transcribing speech live.');
+      const createSocket = dependencies.createWebSocket ?? ((url, protocols) => new WebSocket(url, protocols));
+      socket = createSocket(deepgramListenUrl(), ['token', apiKey]);
+    } catch {
+      fail('Could not open Deepgram. Check its key or network, or type your answer.');
+      return;
+    }
+    const current = socket;
+    current.binaryType = 'arraybuffer';
+    current.onopen = () => {
+      if (stopped || socket !== current) return;
+      for (const frame of queued.splice(0)) {
+        try { current.send(frame); }
+        catch { fail('Deepgram could not receive audio. Retry live voice or type your answer.'); return; }
+      }
+      if (finishing) {
+        try { current.send(JSON.stringify({ type: 'CloseStream' })); }
+        catch { closeFinishedStream(); }
+        return;
+      }
+      state(speech ? 'transcribing' : 'listening', speech
+        ? 'Voice detected · Deepgram is transcribing.'
+        : 'Microphone on · waiting for speech.');
     };
-    next.onmessage = event => {
-      if (socket !== next) return;
+    current.onmessage = event => {
+      if (socket !== current) return;
       const message = parseDeepgramMessage(event.data);
       if (message) publish(message);
     };
-    next.onerror = () => fail('Deepgram transcription connection failed. Type your response or retry live voice.');
-    next.onclose = () => {
-      if (socket === next) socket = undefined;
-      if (!stopped && speech) state('error', 'Deepgram disconnected while listening.');
+    current.onerror = () => fail('Deepgram connection failed. Your microphone has stopped; retry or type your answer.');
+    current.onclose = event => {
+      if (socket !== current || stopped) return;
+      socket = undefined;
+      queued = [];
+      if (finishing) { closeFinishedStream(); return; }
+      if (!speech && event.code === 1000) {
+        state('listening', 'Microphone on · waiting for speech; transcription reconnects when needed.');
+        return;
+      }
+      fail(event.reason || `Deepgram connection closed (${event.code}). Retry live voice or type your answer.`);
     };
   };
 
   const send = (frame: ArrayBuffer) => {
-    if (socket?.readyState === WebSocket.OPEN) socket.send(frame);
-    else if (!socket || socket.readyState === WebSocket.CONNECTING) {
-      queued.push(frame);
-      if (queued.length > 36) queued.shift();
+    if (!socket || socket.readyState > SOCKET_OPEN) {
+      socket = undefined;
       connect();
+    }
+    if (socket?.readyState === SOCKET_OPEN) {
+      try { socket.send(frame); }
+      catch { fail('Deepgram could not receive audio. Retry live voice or type your answer.'); }
+    } else if (socket?.readyState === SOCKET_CONNECTING) {
+      queued.push(frame);
+      if (queued.length > MAX_QUEUED_FRAMES) queued.shift();
     }
   };
 
@@ -184,9 +300,7 @@ export function startDeepgramLiveCapture(
       if (startFrames >= START_FRAMES) {
         speech = true;
         silenceFrames = 0;
-        if (idleTimer) clearTimeout(idleTimer);
-        idleTimer = undefined;
-        state('connecting', 'Speech detected; opening live transcription.');
+        state(socket?.readyState === SOCKET_OPEN ? 'transcribing' : 'voice-detected', 'Voice detected · live transcription is active.');
         for (const buffered of preroll) send(buffered);
         preroll = [];
       }
@@ -199,65 +313,49 @@ export function startDeepgramLiveCapture(
       speech = false;
       startFrames = 0;
       preroll = [];
-      state('listening', 'Waiting for you to speak; the microphone stays local until voice is detected.');
-      if (idleTimer) clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => {
-        if (socket?.readyState === WebSocket.OPEN) {
-          try { socket.send(JSON.stringify({ type: 'CloseStream' })); } catch { /* socket may already be closing */ }
-          socket.close();
-          socket = undefined;
-        }
-        queued = [];
-      }, SOCKET_IDLE_MS);
+      state('listening', 'Microphone on · waiting for more speech. Your transcript is kept.');
     }
-  };
-
-  const stop = () => {
-    if (stopped) return;
-    stopped = true;
-    if (idleTimer) clearTimeout(idleTimer);
-    idleTimer = undefined;
-    if (socket) {
-      try { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'CloseStream' })); } catch { /* no-op */ }
-      try { socket.close(); } catch { /* no-op */ }
-      socket = undefined;
-    }
-    if (processor) { processor.onaudioprocess = null; processor.disconnect(); }
-    source?.disconnect(); mute?.disconnect();
-    stream?.getTracks().forEach(track => track.stop());
-    if (context && context.state !== 'closed') void context.close().catch(() => undefined);
-    handlers.state('stopped');
   };
 
   const begin = async () => {
+    if (stopped) return;
     if (!apiKey.trim()) { fail('Select a Deepgram key in LearnHarness settings first.'); return; }
-    if (!navigator.mediaDevices?.getUserMedia) { fail('Microphone capture is unavailable in this Obsidian environment.'); return; }
-    const browser = window as Window & { webkitAudioContext?: typeof AudioContext };
-    const AudioContextConstructor = browser.AudioContext ?? browser.webkitAudioContext;
-    if (!AudioContextConstructor) { fail('Web Audio is unavailable in this Obsidian environment.'); return; }
-    state('requesting-microphone', 'Allow microphone access to start automatic voice detection.');
+    state('requesting-microphone', 'Requesting microphone access. Audio stays local until speech is detected.');
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      if (stopped) { stream.getTracks().forEach(track => track.stop()); return; }
-      context = new AudioContextConstructor();
+      const getUserMedia = dependencies.getUserMedia ?? ((constraints: MediaStreamConstraints) => {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone capture is unavailable in this Obsidian environment.');
+        return navigator.mediaDevices.getUserMedia(constraints);
+      });
+      stream = await getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      if (stopped) { releaseMicrophone(); return; }
+
+      const createAudioContext = dependencies.createAudioContext ?? (() => {
+        const browser = window as Window & { webkitAudioContext?: typeof AudioContext };
+        const AudioContextConstructor = browser.AudioContext ?? browser.webkitAudioContext;
+        if (!AudioContextConstructor) throw new Error('Web Audio is unavailable in this Obsidian environment.');
+        return new AudioContextConstructor();
+      });
+      context = createAudioContext();
       if (context.sampleRate < OUTPUT_RATE) throw new Error('Unsupported microphone sample rate.');
       await context.resume();
+      if (stopped) { releaseMicrophone(); return; }
       source = context.createMediaStreamSource(stream);
       processor = context.createScriptProcessor(4096, 1, 1);
       mute = context.createGain(); mute.gain.value = 0;
       processor.onaudioprocess = onAudio;
       source.connect(processor); processor.connect(mute); mute.connect(context.destination);
-      state('listening', 'Waiting for you to speak; only detected voice is sent to Deepgram.');
+      state('listening', 'Microphone on · waiting for speech. Audio is not sent while silent.');
     } catch (error) {
-      fail(error instanceof Error && error.name === 'NotAllowedError'
-        ? 'Microphone permission was denied. Type your response or enable microphone access in Obsidian.'
-        : error instanceof Error && error.message === 'Unsupported microphone sample rate.'
+      const message = error instanceof Error && error.name === 'NotAllowedError'
+        ? 'Microphone permission was denied. Allow microphone access in Obsidian, or type your response.'
+        : error instanceof Error
           ? error.message
-          : 'Could not start microphone capture. Type your response or try again.');
+          : 'Could not start microphone capture. Type your response or retry.';
+      fail(message);
     }
   };
 
   // Defer startup until the caller has installed the returned stop handle.
   void Promise.resolve().then(begin);
-  return { stop };
+  return { stop, finish };
 }

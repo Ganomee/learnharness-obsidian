@@ -115,60 +115,84 @@ export class LearningView extends ItemView {
     this.speechCapture = undefined;
   }
 
+  private async finishVoiceCapture(): Promise<void> {
+    const capture = this.speechCapture as (SpeechCapture & { finish?: () => Promise<void> }) | undefined;
+    if (capture?.finish) await capture.finish();
+    else this.stopVoiceCapture();
+  }
+
   private addDeepgramInput(
     parent: HTMLElement,
     field: HTMLTextAreaElement,
-    label: string,
     autoStart: boolean,
     onFinal?: (segment: string) => void,
   ): void {
     const row = parent.createDiv({ cls: 'lh-speech-row lh-live-voice' });
-    const button = row.createEl('button', { text: label, attr: { type: 'button', 'aria-label': label } });
-    const status = row.createSpan({ cls: 'lh-dictation-status', text: 'Deepgram live transcription; interim words update here. The teacher evaluates your answer when you submit.' });
-    const preview = parent.createDiv({ cls: 'lh-live-transcript', attr: { 'aria-live': 'polite', 'aria-label': 'Live transcript' } });
+    row.dataset.voiceState = autoStart ? 'requesting-microphone' : 'stopped';
+    const indicator = row.createSpan({ cls: 'lh-voice-indicator', attr: { 'aria-hidden': 'true' } });
+    const button = row.createEl('button', { text: autoStart ? 'Starting mic…' : 'Start voice', attr: { type: 'button', 'aria-label': autoStart ? 'Pause microphone' : 'Start voice input' } });
+    const status = row.createSpan({ cls: 'lh-dictation-status', text: autoStart ? 'Requesting microphone · audio stays local while silent' : 'Voice input is ready when you need it.', attr: { role: 'status', 'aria-live': 'polite' } });
+    const meter = row.createSpan({ cls: 'lh-voice-meter', attr: { 'aria-hidden': 'true' } });
+    for (let index = 0; index < 5; index++) meter.createSpan();
+    const preview = parent.createDiv({ cls: 'lh-live-transcript', attr: { 'aria-live': 'polite', 'aria-label': 'Live speech transcript' } });
     button.disabled = this.busy;
 
     const start = () => {
       const key = this.getDeepgramApiKey()?.trim();
-      if (!key) { status.setText('Add a Deepgram key in LearnHarness settings to enable live transcription.'); return; }
-      button.setText('Pause live voice');
+      if (!key) {
+        row.dataset.voiceState = 'error';
+        status.setText('Add a Deepgram key in LearnHarness settings, or type your response.');
+        button.setText('Retry');
+        return;
+      }
+      row.dataset.voiceState = 'requesting-microphone';
+      button.setText('Starting mic…');
       const append = (text: string) => {
         if (onFinal) { onFinal(text); return; }
         field.value = [field.value.trim(), text].filter(Boolean).join(field.value.trim() ? '\n' : '');
         field.dispatchEvent(new Event('input', { bubbles: true }));
       };
       const stateText: Record<LiveTranscriptionState, string> = {
-        'requesting-microphone': 'Allow microphone access. Audio stays local until speech is detected.',
-        listening: 'Listening for speech; only detected voice is sent to Deepgram.',
-        connecting: 'Speech detected; connecting to Deepgram…',
-        transcribing: 'Live transcription active. Review the draft before submitting.',
-        stopped: 'Live voice paused. Your typed answer remains here.',
-        error: 'Live transcription stopped. You can type or retry.',
+        'requesting-microphone': 'Requesting microphone · audio stays local while silent',
+        listening: 'Microphone on · waiting for speech',
+        'voice-detected': 'Voice detected · opening transcription',
+        connecting: 'Voice found · connecting to Deepgram',
+        transcribing: 'Transcribing live · pause any time',
+        stopped: 'Microphone paused · your draft is kept',
+        error: 'Microphone stopped · check the message and retry',
       };
       let capture: DeepgramLiveCapture | undefined;
       capture = startDeepgramLiveCapture(key, {
-        state: next => {
-          status.setText(stateText[next]);
+        state: (next, detail) => {
+          row.dataset.voiceState = next;
+          status.setText(next === 'error' && detail ? detail : stateText[next]);
           if (next === 'stopped' || next === 'error') {
             if (capture && this.speechCapture === capture) this.speechCapture = undefined;
-            button.setText('Resume live voice');
+            button.setText(next === 'error' ? 'Retry voice' : 'Resume mic');
+            button.setAttribute('aria-label', next === 'error' ? 'Retry microphone transcription' : 'Resume microphone');
+          } else if (next === 'requesting-microphone' || next === 'listening' || next === 'voice-detected' || next === 'connecting' || next === 'transcribing') {
+            button.setText('Pause mic');
+            button.setAttribute('aria-label', 'Pause microphone');
           }
         },
         transcript: update => {
-          preview.setText(update.interimTranscript
-            ? `Live draft: ${update.transcript}`
-            : update.finalTranscript ? `Transcribed: ${update.finalTranscript}` : '');
+          preview.setText(update.interimTranscript ? `Hearing: ${update.transcript}` : '');
           if (update.isFinal && update.segment) {
             append(update.segment);
+            preview.setText(`Added to answer: ${update.finalTranscript}`);
           }
         },
-        error: message => { status.setText(message); button.setText('Retry live voice'); },
+        error: message => { status.setText(message); },
       });
       this.speechCapture = capture;
     };
 
     button.addEventListener('click', () => {
-      if (this.speechCapture) { this.stopVoiceCapture(); button.setText('Resume live voice'); }
+      if (this.speechCapture) {
+        const capture = this.speechCapture as SpeechCapture & { finish?: () => Promise<void> };
+        if (capture.finish) void capture.finish();
+        else this.stopVoiceCapture();
+      }
       else start();
     });
     if (autoStart) start();
@@ -180,8 +204,7 @@ export class LearningView extends ItemView {
     root.empty(); root.addClass('lh-learning'); root.setAttribute('data-lh-testid', 'learning-view');
     const header = root.createDiv({ cls: 'lh-header' });
     header.createEl('h2', { text: 'LearnHarness' });
-    header.createEl('p', { text: 'Interactive preview · original probing agent', cls: 'lh-muted' });
-    root.createEl('p', { text: 'Probe your understanding, answer questions, and follow the original teacher’s plan.', cls: 'lh-muted' });
+    header.createEl('p', { text: 'Adaptive lesson · original LearnHarness teacher', cls: 'lh-muted' });
     if (this.error) root.createDiv({ text: this.error, cls: 'lh-error', attr: { role: 'alert' } });
     if (this.error) {
       const details = root.createEl('details'); details.createEl('summary', { text: 'Recover a damaged session file' });
@@ -251,10 +274,11 @@ export class LearningView extends ItemView {
         const goal = goalLabel.createEl('textarea', { attr: { rows: '4', placeholder: 'Say it in your own words. Include what you already think, what is confusing, and what you want to be able to do.', 'aria-label': 'Learning goal' } });
         goal.value = this.goal; goal.disabled = this.busy;
         goal.addEventListener('input', () => { this.goal = goal.value; });
-        if (this.getDeepgramApiKey()?.trim()) this.addDeepgramInput(root, goal, 'Enable live goal dictation', false);
+        if (this.getDeepgramApiKey()?.trim()) this.addDeepgramInput(root, goal, false);
         else this.addVoiceInput(root, goal, 'Speak your goal');
       }
-      this.button(root, this.mode === 'demo' ? 'Start offline walkthrough' : 'Start with the adaptive teacher', () => {
+      this.button(root, this.mode === 'demo' ? 'Start offline walkthrough' : 'Start with the adaptive teacher', async () => {
+        await this.finishVoiceCapture();
         const requestedGoal = this.mode === 'demo' ? DEMO_GOAL : this.goal.trim();
         if (!requestedGoal) { this.error = 'Enter a learning goal first.'; this.render(); return; }
         let engine;
@@ -309,11 +333,14 @@ export class LearningView extends ItemView {
       else if (!progress.complete) {
         const text = root.createEl('textarea', { attr: { rows: '3', placeholder: 'Continue, or describe what is still unclear', 'aria-label': 'Continue learning' } });
         text.disabled = this.busy;
-        this.addVoiceInput(root, text, 'Speak a follow-up');
-        this.button(root, this.mode === 'demo' ? 'Continue scripted demo' : 'Send to Flash', () => {
+        if (this.getDeepgramApiKey()?.trim()) this.addDeepgramInput(root, text, true);
+        else this.addVoiceInput(root, text, 'Speak a follow-up');
+        this.button(root, this.mode === 'demo' ? 'Continue scripted demo' : 'Send to Flash', async () => {
+          await this.finishVoiceCapture();
+          const content = text.value;
           let engine;
           try { engine = this.engine(); } catch (error) { this.error = this.message(error); this.render(); return; }
-          const id = this.session!.id; const content = text.value;
+          const id = this.session!.id;
           void this.perform(signal => this.controller.continueSession(id, content, engine, this.options(signal)));
         }, true);
       }
@@ -449,7 +476,7 @@ export class LearningView extends ItemView {
       row.createSpan({ text: option.label });
       if (option.description) row.createEl('small', { text: option.description });
     }
-    const freeText = question.mode === 'text' || question.kind === 'ask' ? card.createEl('textarea', { attr: { rows: '3', 'aria-label': 'Your answer', placeholder: 'Your answer' } }) : undefined;
+    const freeText = question.mode === 'text' || question.kind === 'ask' ? card.createEl('textarea', { attr: { rows: '2', 'aria-label': 'Your answer', placeholder: 'Your answer' } }) : undefined;
     if (freeText) freeText.disabled = this.busy;
     const thinkingLabel = card.createEl('label', { text: 'Your reasoning or uncertainty (optional)' });
     const thinking = thinkingLabel.createEl('textarea', { attr: { rows: '2', 'aria-label': 'Your reasoning' } }); thinking.disabled = this.busy;
@@ -471,7 +498,7 @@ export class LearningView extends ItemView {
           }
         }
     };
-    if (hasDeepgram) this.addDeepgramInput(behindReveal ? host : card, speechTarget(), 'Pause automatic voice', true, applySpeechSegment);
+    if (hasDeepgram) this.addDeepgramInput(behindReveal ? host : card, speechTarget(), true, applySpeechSegment);
     else this.addVoiceInput(card, freeText ?? thinking, 'Speak answer', applySpeechSegment);
     let confidence: HTMLInputElement | undefined;
     if (question.kind === 'quiz') {
@@ -480,7 +507,8 @@ export class LearningView extends ItemView {
       const value = label.createSpan({ text: '50%' }); confidence.disabled = this.busy;
       confidence.addEventListener('input', () => { value.textContent = `${confidence!.value}%`; });
     }
-    const submit = (dontKnow = false) => {
+    const submit = async (dontKnow = false) => {
+      await this.finishVoiceCapture();
       if (!dontKnow && !selection.size && !freeText?.value.trim()) { this.error = 'Choose or enter an answer first.'; this.render(); return; }
       const request: AnswerRequest = { values: [...selection], thinking: thinking.value, ...(reading?.value.trim() ? { readingThinking: reading.value } : {}), ...(freeText ? { text: freeText.value, other: freeText.value } : {}), ...(dontKnow ? { dontKnow: true } : {}), ...(confidence && !dontKnow ? { confidence: Number(confidence.value) } : {}) };
       let engine;
