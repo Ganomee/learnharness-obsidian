@@ -1,0 +1,23 @@
+name: Baseline contracts
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  baseline:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run build
+      - run: npm run check:upstream
+      - run: npm run validate:vault
+      - run: python scripts/adversarial-check.py
+      - run: python scripts/adversarial-runtime-check.py
