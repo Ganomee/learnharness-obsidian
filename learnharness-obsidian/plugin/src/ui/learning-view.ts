@@ -101,6 +101,7 @@ export class LearningView extends ItemView {
   }
 
   private render(): void {
+    if (this.error.startsWith('No DeepSeek key is selected.') && this.getApiKey()?.trim()) this.error = '';
     const root = this.contentEl;
     root.empty(); root.addClass('lh-learning'); root.setAttribute('data-lh-testid', 'learning-view');
     const header = root.createDiv({ cls: 'lh-header' });
